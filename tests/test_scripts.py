@@ -62,3 +62,22 @@ def test_check_llm_script_without_configuration():
     assert result.returncode == 1
     assert "No providers are configured" in result.stdout
     assert "Traceback" not in result.stderr
+
+def test_check_llm_rejects_zero_benchmark_runs():
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "check_llm.py"),
+            "--benchmark",
+            "--runs",
+            "0",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 2
+    assert "--runs must be at least 1" in result.stderr
+
