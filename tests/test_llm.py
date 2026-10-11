@@ -181,3 +181,101 @@ def test_scripted_llm_exhaustion():
     client = ScriptedLLM([])
     with pytest.raises(LLMError, match="no responses"):
         client.complete([{"role": "user", "content": "Hi"}])
+from resolveai.llm_factory import build_llm
+
+
+def test_malformed_provider_response_raises_llm_error():
+    client = OpenAICompatLLM(
+        base_url="http://test/v1",
+        model="test-model",
+        max_retries=0,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"unexpected": "body"})
+        ),
+    )
+
+    try:
+        with pytest.raises(LLMError, match="invalid chat response"):
+            client.complete([{"role": "user", "content": "Hi"}])
+    finally:
+        client.close()
+
+
+def test_fallback_uses_next_provider_after_failure():
+    settings = Settings(
+        llm_provider_order=["groq", "ollama"],
+        groq_api_key="test-key",
+        groq_model="groq-test",
+        ollama_model="ollama-test",
+    )
+
+    class Client:
+        def __init__(self, error=None, result="ok"):
+            self.error = error
+            self.result = result
+            self.called = False
+
+        def complete(self, messages, *, json_mode=False):
+            self.called = True
+            if self.error:
+                raise self.error
+            return self.result
+
+    groq = Client(error=LLMError("temporary failure"))
+    ollama = Client(result="fallback response")
+
+    fallback = FallbackLLM(settings, {"groq": groq, "ollama": ollama})
+
+    assert fallback.complete([{"role": "user", "content": "Hi"}]) == (
+        "fallback response"
+    )
+    assert groq.called
+    assert ollama.called
+
+
+def test_fallback_raises_when_all_providers_fail():
+    settings = Settings(
+        llm_provider_order=["ollama"],
+        ollama_model="local-test",
+    )
+
+    class Client:
+        def complete(self, messages, *, json_mode=False):
+            raise LLMError("provider unavailable")
+
+    fallback = FallbackLLM(settings, {"ollama": Client()})
+
+    with pytest.raises(LLMError, match="All LLM providers failed"):
+        fallback.complete([{"role": "user", "content": "Hi"}])
+
+
+def test_factory_selects_only_configured_providers():
+    settings = Settings(
+        llm_provider_order=["groq", "gemini", "ollama"],
+        groq_api_key="test-groq-key",
+        groq_model="groq-test-model",
+        gemini_api_key="",
+        gemini_model="gemini-test-model",
+        ollama_model="",
+    )
+
+    client = build_llm(settings)
+
+    try:
+        assert list(client.clients) == ["groq"]
+        assert client.clients["groq"].model == "groq-test-model"
+    finally:
+        for provider_client in client.clients.values():
+            provider_client.close()
+
+
+def test_structured_llm_propagates_provider_failure():
+    client = ScriptedLLM([LLMError("provider unavailable")])
+
+    with pytest.raises(LLMError, match="provider unavailable"):
+        StructuredLLM(client).decide(
+            "triage",
+            "Return a valid decision",
+            "Check this ticket",
+            Decision,
+        )
