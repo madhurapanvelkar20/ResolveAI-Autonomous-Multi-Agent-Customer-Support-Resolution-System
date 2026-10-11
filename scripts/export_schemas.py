@@ -1,4 +1,3 @@
-
 """Export Pydantic model schemas to JSON files."""
 
 import json
@@ -17,7 +16,7 @@ from resolveai.schemas import (
     TicketIn,
 )
 
-OUTPUT_DIR = ROOT / "schemas_export"
+OUTPUT_DIR = ROOT / "docs" / "schemas"
 
 MODELS = {
     "ticket_in": TicketIn,

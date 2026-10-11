@@ -21,7 +21,7 @@ def test_export_schemas_script():
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Successfully exported 5 schemas." in result.stdout
 
-    output_dir = ROOT / "schemas_export"
+    output_dir = ROOT / "docs" / "schemas"
     expected_files = [
         "ticket_in.schema.json",
         "agent_decision.schema.json",
