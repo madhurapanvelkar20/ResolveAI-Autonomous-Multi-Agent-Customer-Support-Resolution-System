@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resolveai-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: ResolveAI
+      APP_VERSION: "0.1.0"
+      ENVIRONMENT: development
+    restart: unless-stopped
