@@ -1,0 +1,527 @@
+{
+  "$defs": {
+    "AgentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "enum": [
+            "triage",
+            "investigation",
+            "resolution",
+            "critic"
+          ],
+          "title": "Agent",
+          "type": "string"
+        },
+        "next_action": {
+          "enum": [
+            "call_tool",
+            "request_investigation",
+            "ask_customer",
+            "human_escalation",
+            "report_findings",
+            "request_replan",
+            "propose",
+            "request_evidence",
+            "approve",
+            "reject"
+          ],
+          "title": "Next Action",
+          "type": "string"
+        },
+        "next_agent": {
+          "enum": [
+            "triage",
+            "investigation",
+            "resolution",
+            "critic",
+            "none"
+          ],
+          "title": "Next Agent",
+          "type": "string"
+        },
+        "tool_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 3,
+          "title": "Reason",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "risk": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk"
+        },
+        "state_updates": {
+          "additionalProperties": true,
+          "title": "State Updates",
+          "type": "object"
+        }
+      },
+      "required": [
+        "agent",
+        "next_action",
+        "next_agent",
+        "reason",
+        "confidence"
+      ],
+      "title": "AgentDecision",
+      "type": "object"
+    },
+    "CaseMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "sender": {
+          "enum": [
+            "triage",
+            "investigation",
+            "resolution",
+            "critic"
+          ],
+          "title": "Sender",
+          "type": "string"
+        },
+        "recipient": {
+          "enum": [
+            "triage",
+            "investigation",
+            "resolution",
+            "critic",
+            "none"
+          ],
+          "title": "Recipient",
+          "type": "string"
+        },
+        "message_type": {
+          "enum": [
+            "request_investigation",
+            "evidence_report",
+            "proposal",
+            "critique",
+            "revision_request",
+            "replan",
+            "escalation",
+            "clarification_request"
+          ],
+          "title": "Message Type",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "iteration": {
+          "minimum": 0,
+          "title": "Iteration",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sender",
+        "recipient",
+        "message_type",
+        "content",
+        "iteration"
+      ],
+      "title": "CaseMessage",
+      "type": "object"
+    },
+    "CriticFeedback": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "reject",
+            "request_evidence"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 3,
+          "title": "Reason",
+          "type": "string"
+        },
+        "missing_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Evidence",
+          "type": "array"
+        },
+        "policy_citations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Policy Citations",
+          "type": "array"
+        },
+        "recommended_next_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recommended Next Action"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "decision",
+        "reason",
+        "confidence"
+      ],
+      "title": "CriticFeedback",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "missing",
+            "tool_failure",
+            "policy"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "citation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Citation"
+        }
+      },
+      "required": [
+        "source",
+        "status",
+        "summary"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Resolution": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "action_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Resolution",
+      "type": "object"
+    },
+    "TicketIn": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "customer_id": {
+          "title": "Customer Id",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "web",
+            "email",
+            "chat"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "customer_id",
+        "message",
+        "channel",
+        "timestamp"
+      ],
+      "title": "TicketIn",
+      "type": "object"
+    },
+    "ToolCall": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "ticket": {
+      "$ref": "#/$defs/TicketIn"
+    },
+    "status": {
+      "default": "open",
+      "enum": [
+        "open",
+        "resolved",
+        "escalated",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "current_hypothesis": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Hypothesis"
+    },
+    "plan": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Plan",
+      "type": "array"
+    },
+    "messages": {
+      "items": {
+        "$ref": "#/$defs/CaseMessage"
+      },
+      "title": "Messages",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "tools_used": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools Used",
+      "type": "array"
+    },
+    "agent_decisions": {
+      "items": {
+        "$ref": "#/$defs/AgentDecision"
+      },
+      "title": "Agent Decisions",
+      "type": "array"
+    },
+    "critic_feedback": {
+      "items": {
+        "$ref": "#/$defs/CriticFeedback"
+      },
+      "title": "Critic Feedback",
+      "type": "array"
+    },
+    "resolution_candidates": {
+      "items": {
+        "$ref": "#/$defs/Resolution"
+      },
+      "title": "Resolution Candidates",
+      "type": "array"
+    },
+    "selected_resolution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Resolution"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "iteration": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Iteration",
+      "type": "integer"
+    },
+    "confidence": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "escalation_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Escalation Reason"
+    }
+  },
+  "required": [
+    "case_id",
+    "ticket"
+  ],
+  "title": "CaseState",
+  "type": "object"
+}

@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "ToolCall": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agent": {
+      "enum": [
+        "triage",
+        "investigation",
+        "resolution",
+        "critic"
+      ],
+      "title": "Agent",
+      "type": "string"
+    },
+    "next_action": {
+      "enum": [
+        "call_tool",
+        "request_investigation",
+        "ask_customer",
+        "human_escalation",
+        "report_findings",
+        "request_replan",
+        "propose",
+        "request_evidence",
+        "approve",
+        "reject"
+      ],
+      "title": "Next Action",
+      "type": "string"
+    },
+    "next_agent": {
+      "enum": [
+        "triage",
+        "investigation",
+        "resolution",
+        "critic",
+        "none"
+      ],
+      "title": "Next Agent",
+      "type": "string"
+    },
+    "tool_call": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ToolCall"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reason": {
+      "maxLength": 500,
+      "minLength": 3,
+      "title": "Reason",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "risk": {
+      "anyOf": [
+        {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Risk"
+    },
+    "state_updates": {
+      "additionalProperties": true,
+      "title": "State Updates",
+      "type": "object"
+    }
+  },
+  "required": [
+    "agent",
+    "next_action",
+    "next_agent",
+    "reason",
+    "confidence"
+  ],
+  "title": "AgentDecision",
+  "type": "object"
+}

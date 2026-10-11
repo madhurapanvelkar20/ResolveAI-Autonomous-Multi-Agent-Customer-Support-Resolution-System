@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "Resolution": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "action_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Resolution",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "resolved",
+        "escalated",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "customer_response": {
+      "minLength": 1,
+      "title": "Customer Response",
+      "type": "string"
+    },
+    "resolution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Resolution"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "agents_involved": {
+      "items": {
+        "enum": [
+          "triage",
+          "investigation",
+          "resolution",
+          "critic"
+        ],
+        "type": "string"
+      },
+      "title": "Agents Involved",
+      "type": "array"
+    },
+    "tools_used": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools Used",
+      "type": "array"
+    },
+    "iterations": {
+      "minimum": 0,
+      "title": "Iterations",
+      "type": "integer"
+    },
+    "critic_decision": {
+      "anyOf": [
+        {
+          "enum": [
+            "approve",
+            "reject",
+            "request_evidence"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Critic Decision"
+    },
+    "escalation_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Escalation Reason"
+    },
+    "trace_id": {
+      "minLength": 1,
+      "title": "Trace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "status",
+    "customer_response",
+    "confidence",
+    "agents_involved",
+    "tools_used",
+    "iterations",
+    "trace_id"
+  ],
+  "title": "CaseResult",
+  "type": "object"
+}

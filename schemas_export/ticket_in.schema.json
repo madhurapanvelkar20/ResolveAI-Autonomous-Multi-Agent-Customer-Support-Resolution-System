@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "ticket_id": {
+      "title": "Ticket Id",
+      "type": "string"
+    },
+    "customer_id": {
+      "title": "Customer Id",
+      "type": "string"
+    },
+    "message": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "channel": {
+      "enum": [
+        "web",
+        "email",
+        "chat"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "customer_id",
+    "message",
+    "channel",
+    "timestamp"
+  ],
+  "title": "TicketIn",
+  "type": "object"
+}
