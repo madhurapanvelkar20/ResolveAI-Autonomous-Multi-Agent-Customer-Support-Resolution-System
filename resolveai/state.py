@@ -93,13 +93,15 @@ class CaseStateStore:
 
         for field, value in updates.items():
             if field == "resolution_candidates":
-                if not isinstance(value, list) or not all(
-                    isinstance(item, Resolution) for item in value
-                ):
-                    raise ValueError(
-                        "resolution_candidates must contain Resolution objects"
-                    )
-                candidate[field] = candidate[field] + deepcopy(value)
+                if not isinstance(value, list):
+                    raise ValueError("resolution_candidates must be a list")
+
+                parsed_resolutions = [
+                    item if isinstance(item, Resolution) else Resolution.model_validate(item)
+                    for item in value
+                ]
+
+                candidate[field] = candidate[field] + deepcopy(parsed_resolutions)
 
             elif field == "critic_feedback":
                 if not isinstance(value, list) or not all(
