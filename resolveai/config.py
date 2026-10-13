@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     tool_transport: ToolTransport = "direct"
     database_path: str = "data/resolveai.db"
     chroma_dir: str = "data/chroma"
+    policy_dir: str = "docs/policies"
+    embedding_model_name: str = "all-MiniLM-L6-v2"
+    rag_top_k: int = Field(default=3, ge=1, le=20)
+    rag_relevance_threshold: float = Field(default=0.25, ge=0.0, le=1.0)
 
     @field_validator("llm_provider_order", mode="before")
     @classmethod
