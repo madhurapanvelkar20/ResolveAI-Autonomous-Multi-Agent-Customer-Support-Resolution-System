@@ -1,0 +1,100 @@
+{
+  "name": "ResolveAI - Customer Intake and Case Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "10000001-0000-0000-0000-000000000001",
+      "name": "Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 200],
+      "webhookId": "customer-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nif (!body.customer_id || typeof body.customer_id !== 'string') {\n  throw new Error('Validation failed: customer_id is required');\n}\nif (!body.message || typeof body.message !== 'string' || body.message.trim().length === 0) {\n  throw new Error('Validation failed: message cannot be blank');\n}\nreturn [{\n  json: {\n    customer_id: body.customer_id.trim(),\n    message: body.message.trim(),\n    subject: body.subject || 'Support Ticket',\n    channel: body.channel || 'web',\n    ticket_id: body.ticket_id || undefined,\n    metadata: body.metadata || {}\n  }\n}];"
+      },
+      "id": "10000001-0000-0000-0000-000000000002",
+      "name": "Validate Complaint Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.RESOLVEAI_API_URL || 'http://localhost:8000') + '/cases' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "10000001-0000-0000-0000-000000000003",
+      "name": "Create Case via ResolveAI API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "10000001-0000-0000-0000-000000000004",
+      "name": "Respond with Case Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [740, 200]
+    }
+  ],
+  "connections": {
+    "Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Complaint Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Complaint Input": {
+      "main": [
+        [
+          {
+            "node": "Create Case via ResolveAI API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Case via ResolveAI API": {
+      "main": [
+        [
+          {
+            "node": "Respond with Case Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

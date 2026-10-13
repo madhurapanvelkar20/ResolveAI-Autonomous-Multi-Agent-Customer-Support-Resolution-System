@@ -1,0 +1,37 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resolveai-api-dev
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: ResolveAI
+      APP_VERSION: "0.1.0"
+      ENVIRONMENT: development
+      DATABASE_PATH: /app/data/resolveai.db
+      CHROMA_DIR: /app/data/chroma
+      TRACE_DIR: /app/traces
+      POLICY_DIR: /app/docs/policies
+    volumes:
+      - ./resolveai:/app/resolveai
+      - ./data:/app/data
+      - ./traces:/app/traces
+    command: ["uvicorn", "resolveai.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+
+  frontend:
+    image: node:20-alpine
+    container_name: resolveai-frontend-dev
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+    command: ["npm", "run", "dev", "--", "--host"]
+    depends_on:
+      - api
+    restart: unless-stopped

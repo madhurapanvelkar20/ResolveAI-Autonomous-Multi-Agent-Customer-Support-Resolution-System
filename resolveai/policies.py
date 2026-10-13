@@ -84,7 +84,7 @@ def slugify(text: str) -> str:
 
 def parse_policy_metadata(content: str) -> tuple[str, str, str]:
     """Extract policy identifier, version, and primary title from content."""
-    clean = content.replace("*", "")
+    clean = content.lstrip("\ufeff").replace("*", "")
     pid_match = re.search(
         r"(?:Policy\s*Identifier|Policy\s*ID):\s*([A-Za-z0-9_-]+)",
         clean,
@@ -95,7 +95,7 @@ def parse_policy_metadata(content: str) -> tuple[str, str, str]:
         clean,
         re.IGNORECASE,
     )
-    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+    title_match = re.search(r"^#\s+(.+)$", clean, re.MULTILINE)
 
     policy_id = pid_match.group(1).strip() if pid_match else "UNKNOWN"
     version = ver_match.group(1).strip() if ver_match else "1.0.0"

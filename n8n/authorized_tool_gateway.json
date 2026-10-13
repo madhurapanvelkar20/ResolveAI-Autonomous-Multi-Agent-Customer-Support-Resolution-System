@@ -1,0 +1,100 @@
+{
+  "name": "ResolveAI - Authorized Tool Gateway",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tool-gateway",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "20000002-0000-0000-0000-000000000001",
+      "name": "Tool Gateway Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 200],
+      "webhookId": "tool-gateway"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst allowedTools = [\n  'lookup_customer',\n  'lookup_ticket',\n  'lookup_order',\n  'lookup_payment',\n  'search_tickets',\n  'add_internal_note',\n  'set_ticket_status',\n  'request_refund',\n  'escalate_to_human',\n  'search_knowledge_base'\n];\nif (!body.tool || !allowedTools.includes(body.tool)) {\n  throw new Error(`Unauthorized tool request: ${body.tool || 'none'}. Allowed: ${allowedTools.join(', ')}`);\n}\nreturn [{\n  json: {\n    tool: body.tool,\n    args: body.args || {},\n    agent: body.agent || 'investigation'\n  }\n}];"
+      },
+      "id": "20000002-0000-0000-0000-000000000002",
+      "name": "Validate Authorized Tool",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.RESOLVEAI_API_URL || 'http://localhost:8000') + '/tools/execute' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "20000002-0000-0000-0000-000000000003",
+      "name": "Execute Authorized Tool via API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [540, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "20000002-0000-0000-0000-000000000004",
+      "name": "Return Tool Execution Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [760, 200]
+    }
+  ],
+  "connections": {
+    "Tool Gateway Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Authorized Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Authorized Tool": {
+      "main": [
+        [
+          {
+            "node": "Execute Authorized Tool via API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Authorized Tool via API": {
+      "main": [
+        [
+          {
+            "node": "Return Tool Execution Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

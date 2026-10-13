@@ -1,0 +1,118 @@
+{
+  "name": "ResolveAI - Human Escalation and Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "human-escalation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "30000003-0000-0000-0000-000000000001",
+      "name": "Escalation Trigger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 200],
+      "webhookId": "human-escalation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nif (!body.case_id) {\n  throw new Error('case_id is required for escalation');\n}\nreturn [{\n  json: {\n    case_id: body.case_id,\n    reason: body.reason || 'Escalation triggered by safety limits or policy violation',\n    risk: body.risk || 'medium',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "30000003-0000-0000-0000-000000000002",
+      "name": "Validate Escalation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.RESOLVEAI_API_URL || 'http://localhost:8000') + '/cases/' + $json.case_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "30000003-0000-0000-0000-000000000003",
+      "name": "Fetch Case Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [540, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const caseData = $input.first().json;\nconst prev = $('Validate Escalation').first().json;\nreturn [{\n  json: {\n    escalation_status: 'logged_for_human_review',\n    case_id: caseData.case_id,\n    customer_id: caseData.customer_id,\n    ticket_id: caseData.ticket_id,\n    risk_level: prev.risk,\n    reason: prev.reason,\n    notification_channel: 'support_tier2_queue',\n    dispatched_at: prev.timestamp,\n    live_dispatch_suppressed: true\n  }\n}];"
+      },
+      "id": "30000003-0000-0000-0000-000000000004",
+      "name": "Format Support Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "30000003-0000-0000-0000-000000000005",
+      "name": "Respond Escalation Logged",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [980, 200]
+    }
+  ],
+  "connections": {
+    "Escalation Trigger Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Escalation": {
+      "main": [
+        [
+          {
+            "node": "Fetch Case Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Case Details": {
+      "main": [
+        [
+          {
+            "node": "Format Support Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Support Alert": {
+      "main": [
+        [
+          {
+            "node": "Respond Escalation Logged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

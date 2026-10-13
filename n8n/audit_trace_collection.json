@@ -1,0 +1,118 @@
+{
+  "name": "ResolveAI - Audit and Trace Collection",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "audit-trace-collector",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "40000004-0000-0000-0000-000000000001",
+      "name": "Audit Collector Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 200],
+      "webhookId": "audit-trace-collector"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nif (!body.case_id) {\n  throw new Error('case_id is required for trace collection');\n}\nreturn [{\n  json: {\n    case_id: body.case_id\n  }\n}];"
+      },
+      "id": "40000004-0000-0000-0000-000000000002",
+      "name": "Validate Case ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.RESOLVEAI_API_URL || 'http://localhost:8000') + '/cases/' + $json.case_id + '/trace' }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "40000004-0000-0000-0000-000000000003",
+      "name": "Fetch Case Trace from API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [540, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const traceData = $input.first().json;\nconst events = traceData.events || [];\nconst agents = new Set();\nconst tools = new Set();\nlet safetyLimitsHit = 0;\nlet criticDecision = null;\nlet finalOutcome = null;\n\nfor (const ev of events) {\n  if (ev.agent) agents.add(ev.agent);\n  if (ev.tool) tools.add(ev.tool);\n  if (ev.event === 'safety_limit') safetyLimitsHit++;\n  if (ev.agent === 'critic' && ev.decision) criticDecision = ev.decision;\n  if (ev.event === 'final') finalOutcome = ev.decision;\n}\n\nreturn [{\n  json: {\n    case_id: traceData.case_id,\n    trace_id: traceData.trace_id,\n    audit_timestamp: new Date().toISOString(),\n    total_events: events.length,\n    agents_involved: Array.from(agents),\n    tools_invoked: Array.from(tools),\n    safety_limit_violations: safetyLimitsHit,\n    critic_decision: criticDecision,\n    final_outcome: finalOutcome,\n    trace_events: events\n  }\n}];"
+      },
+      "id": "40000004-0000-0000-0000-000000000004",
+      "name": "Aggregate Audit Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "40000004-0000-0000-0000-000000000005",
+      "name": "Return Audit Summary",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [980, 200]
+    }
+  ],
+  "connections": {
+    "Audit Collector Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Case ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Case ID": {
+      "main": [
+        [
+          {
+            "node": "Fetch Case Trace from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Case Trace from API": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Audit Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Audit Metrics": {
+      "main": [
+        [
+          {
+            "node": "Return Audit Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
