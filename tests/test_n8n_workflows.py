@@ -10,11 +10,12 @@ EXPECTED_WORKFLOW_FILES = [
     "authorized_tool_gateway.json",
     "human_escalation_notification.json",
     "audit_trace_collection.json",
+    "resolution_event_demo.json",
 ]
 
 
-def test_all_four_n8n_workflows_exist():
-    """All 4 required n8n workflow definitions must exist in the n8n/ directory."""
+def test_all_n8n_workflows_exist():
+    """All required n8n workflow definitions must exist in the n8n/ directory."""
     assert N8N_DIR.exists() and N8N_DIR.is_dir()
     for filename in EXPECTED_WORKFLOW_FILES:
         path = N8N_DIR / filename
@@ -99,3 +100,31 @@ def test_authorized_tool_gateway_enforces_whitelist():
     assert "lookup_customer" in code
     assert "lookup_order" in code
     assert "search_knowledge_base" in code
+
+
+def test_resolution_event_workflow_is_authenticated_and_non_executing():
+    path = N8N_DIR / "resolution_event_demo.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    webhook = next(
+        node
+        for node in data["nodes"]
+        if node["name"] == "Approved Case Event Webhook"
+    )
+    code_node = next(
+        node
+        for node in data["nodes"]
+        if node["name"] == "Validate and Simulate Safe Event"
+    )
+
+    assert webhook["parameters"]["authentication"] == "headerAuth"
+    assert "event_idempotency_key" in code_node["parameters"]["jsCode"]
+    assert "simulated_notification" in code_node["parameters"]["jsCode"]
+    assert all(
+        node["type"]
+        in {
+            "n8n-nodes-base.webhook",
+            "n8n-nodes-base.code",
+            "n8n-nodes-base.respondToWebhook",
+        }
+        for node in data["nodes"]
+    )

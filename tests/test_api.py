@@ -1,11 +1,15 @@
 """Comprehensive tests for the ResolveAI HTTP API (Phase 5)."""
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from resolveai import database
+import resolveai.api as api_module
 from resolveai.api import app
 from resolveai.config import get_settings
+from resolveai.schemas import CaseResult, Resolution
 
 
 @pytest.fixture(autouse=True)
@@ -147,12 +151,109 @@ def test_run_case_with_scenario():
     assert data["result"]["status"] == "resolved"
     assert data["result"]["critic_decision"] == "approve"
     assert data["result"]["resolution"]["type"] == "refund"
+    assert data["result"]["financial_action_status"] == "approved"
+    assert data["result"]["workflow_integration_status"] == "mock_skipped"
 
     # Verify GET /cases/{case_id} now returns the resolved result
     get_res = client.get(f"/cases/{case_id}")
     assert get_res.status_code == 200
     assert get_res.json()["status"] == "resolved"
     assert get_res.json()["result"] is not None
+
+
+def test_real_approved_case_sends_and_persists_safe_n8n_result(monkeypatch):
+    client = TestClient(app)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "n8n_enabled", True)
+    monkeypatch.setattr(
+        settings,
+        "n8n_webhook_url",
+        "https://n8n.example.test/webhook/resolveai-case-event",
+    )
+    monkeypatch.setattr(
+        settings, "n8n_webhook_token", SecretStr("api-test-token")
+    )
+
+    class ApprovedWorkflow:
+        def __init__(self, **kwargs):
+            del kwargs
+            pass
+
+        def run(self, ticket):
+            return CaseResult(
+                case_id=f"case-{ticket.ticket_id}",
+                status="resolved",
+                customer_response="Resolution ready.",
+                resolution=Resolution(type="explanation"),
+                confidence=0.95,
+                agents_involved=[],
+                tools_used=[],
+                iterations=1,
+                critic_decision="approve",
+                trace_id="trace-internal-test",
+            )
+
+    monkeypatch.setattr(api_module, "ResolveAIWorkflow", ApprovedWorkflow)
+    requests = []
+    transport = httpx.MockTransport(
+        lambda request: _complete_n8n_request(request, requests)
+    )
+    client_type = httpx.Client
+
+    def client_factory(*, timeout, follow_redirects):
+        return client_type(
+            transport=transport,
+            timeout=timeout,
+            follow_redirects=follow_redirects,
+        )
+
+    monkeypatch.setattr("resolveai.n8n_integration.httpx.Client", client_factory)
+
+    created = client.post(
+        "/cases",
+        json={"customer_id": "cust-demo-001", "message": "Please review my case."},
+    )
+    case_id = created.json()["case_id"]
+
+    first = client.post(f"/cases/{case_id}/run", json={})
+    assert first.status_code == 200
+    assert first.json()["result"]["workflow_integration_status"] == "completed"
+    assert (
+        first.json()["result"]["workflow_integration_result"]
+        == "simulated_notification"
+    )
+    assert first.json()["result"]["financial_action_status"] is None
+    assert len(requests) == 1
+    assert requests[0]["headers"]["Authorization"] == "Bearer api-test-token"
+    assert "trace_id" not in requests[0]["body"]
+
+    second = client.post(f"/cases/{case_id}/run", json={})
+    assert second.status_code == 200
+    assert second.json()["result"]["workflow_integration_status"] == "completed"
+    assert len(requests) == 1
+
+    stored = client.get(f"/cases/{case_id}")
+    assert stored.json()["result"]["workflow_integration_result"] == "simulated_notification"
+
+
+def _complete_n8n_request(request, observed_requests):
+    import json
+
+    event = json.loads(request.read())
+    observed_requests.append(
+        {
+            "headers": request.headers,
+            "body": event,
+        }
+    )
+    return httpx.Response(
+        200,
+        json={
+            "status": "completed",
+            "event_idempotency_key": event["event_idempotency_key"],
+            "demo_result": "simulated_notification",
+        },
+    )
 
 
 def test_run_case_prevent_duplicate_resolution():

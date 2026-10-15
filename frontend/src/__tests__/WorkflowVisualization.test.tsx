@@ -93,6 +93,41 @@ describe('WorkflowVisualization Component', () => {
     expect(screen.queryByText(/Triage Agent|Investigation Agent|Resolution Agent|Critic Agent|lookup_payment|Trace ID/i)).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['mock_skipped', 'Mock mode; no external workflow was called.'],
+    ['not_configured', 'n8n is not configured; no external workflow was called.'],
+    ['accepted', 'n8n accepted the safe workflow request; completion is not yet confirmed.'],
+    ['completed', 'The safe n8n demonstration workflow completed.'],
+    ['failed', 'The safe n8n workflow failed; completion was not confirmed.'],
+    ['timed_out', 'The safe n8n workflow timed out; completion was not confirmed.'],
+  ] as const)('shows safe integration status %s without exposing diagnostics', (status, message) => {
+    const result: CaseResult = {
+      case_id: 'case-integration',
+      status: 'resolved',
+      customer_response: 'A support resolution is ready.',
+      resolution: { type: 'explanation' },
+      confidence: 0.9,
+      agents_involved: [],
+      tools_used: [],
+      iterations: 1,
+      critic_decision: 'approve',
+      trace_id: 'trace-internal',
+      workflow_integration_status: status,
+    };
+
+    render(
+      <WorkflowVisualization
+        caseId={result.case_id}
+        result={result}
+        isLoading={false}
+        error={null}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(message);
+    expect(screen.queryByText(/trace-internal|webhook|token|payment_id/i)).not.toBeInTheDocument();
+  });
+
   it('labels an unapproved refund as proposed and suppresses completion claims', () => {
     const mockResult: CaseResult = {
       case_id: 'case-demo-2',

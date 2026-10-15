@@ -257,6 +257,40 @@
       ],
       "default": null,
       "title": "Financial Action Status"
+    },
+    "workflow_integration_status": {
+      "anyOf": [
+        {
+          "enum": [
+            "not_configured",
+            "mock_skipped",
+            "ineligible",
+            "accepted",
+            "completed",
+            "failed",
+            "timed_out"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Integration Status"
+    },
+    "workflow_integration_result": {
+      "anyOf": [
+        {
+          "const": "simulated_notification",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Integration Result"
     }
   },
   "required": [

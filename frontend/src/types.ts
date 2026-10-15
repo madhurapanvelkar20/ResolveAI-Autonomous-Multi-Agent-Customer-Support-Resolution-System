@@ -31,6 +31,15 @@ export type FinancialActionStatus =
   | 'submitted'
   | 'completed';
 
+export type WorkflowIntegrationStatus =
+  | 'not_configured'
+  | 'mock_skipped'
+  | 'ineligible'
+  | 'accepted'
+  | 'completed'
+  | 'failed'
+  | 'timed_out';
+
 export interface CaseResult {
   case_id: string;
   status: 'resolved' | 'escalated' | 'failed';
@@ -46,6 +55,8 @@ export interface CaseResult {
   customer_summary?: string | null;
   customer_timeline?: CustomerTimelineEvent[];
   financial_action_status?: FinancialActionStatus | null;
+  workflow_integration_status?: WorkflowIntegrationStatus | null;
+  workflow_integration_result?: 'simulated_notification' | null;
 }
 
 export interface CaseRecord {

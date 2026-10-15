@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from resolveai import database
 from resolveai.config import get_settings
 from resolveai.llm import ScriptedLLM
+from resolveai.n8n_integration import dispatch_resolution_event
 from resolveai.scenarios import ALL_SCENARIOS, resolve_mock_scenario, run_scenario
 from resolveai.schemas import Channel, ID_PATTERN, TicketIn
 from resolveai.tools import execute_tool
@@ -403,6 +404,7 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
 
     mock_mode = payload.mock if payload else False
     scenario_choice = payload.scenario if payload else None
+    mock_execution = bool(mock_mode or scenario_choice)
 
     tracer = TraceLogger(trace_dir=current_settings.trace_dir)
 
@@ -487,6 +489,15 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
             )
         except Exception:
             pass
+
+    result.workflow_integration_status = dispatch_resolution_event(
+        current_settings,
+        actual_case_id,
+        result,
+        mock_mode=mock_execution,
+    )
+    if result.workflow_integration_status == "completed":
+        result.workflow_integration_result = "simulated_notification"
 
     # Persist case result to database
     with database.connect_db(current_settings.database_path) as connection:
@@ -590,6 +601,7 @@ def run_scenario_endpoint(scenario_name: str):
 
     scenario = ALL_SCENARIOS[scenario_name]
     result, trace_path = run_scenario(scenario, trace_dir=current_settings.trace_dir)
+    result.workflow_integration_status = "mock_skipped"
 
     # Save to database
     case_id = result.case_id
