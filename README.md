@@ -179,6 +179,30 @@ Health check:
 Invoke-RestMethod -Uri http://127.0.0.1:8000/health
 ```
 
+### 4.6 Optional safe n8n resolution-event workflow
+
+ResolveAI includes a local n8n service in `docker-compose.yml` and an importable workflow at [`n8n/resolution_event_demo.json`](n8n/resolution_event_demo.json). The API sends this workflow only a minimal event after a real-mode case has a validated, Critic-approved, allowlisted resolution. The sample workflow validates that event and returns a **simulated notification**; it does not issue refunds, change accounts, dispatch real notifications, execute commands, or read customer/payment/trace data. Deterministic Mock Mode and benchmark scenarios never call n8n.
+
+The integration is disabled by default. Add these placeholder variables to your local `.env` (never commit the actual token):
+
+```dotenv
+N8N_ENABLED=false
+N8N_WEBHOOK_URL=
+N8N_WEBHOOK_TOKEN=
+N8N_TIMEOUT_SECONDS=5
+```
+
+To enable the safe local test:
+
+1. Set `N8N_ENABLED=true` and set `N8N_WEBHOOK_TOKEN` to a new, private token.
+2. Start the existing local n8n service and API with Docker Compose: `docker compose up -d api n8n`. n8n is available at `http://localhost:5678`. The Compose API uses the internal URL `http://n8n:5678/webhook/resolveai-case-event`; if running the API directly with Uvicorn on the host, set `N8N_WEBHOOK_URL=http://localhost:5678/webhook/resolveai-case-event`.
+3. In n8n, import `n8n/resolution_event_demo.json`. Create a **Header Auth** credential with header name `Authorization` and value `Bearer <the same private token>`, assign it to the workflow's **Approved Case Event Webhook** node, then save and activate the workflow. The credential is intentionally not included in the export.
+4. Run ResolveAI with a customer-created case in **Live LLM** mode (do not choose a benchmark scenario). The LLM provider must already be configured. The frontend shows whether the event was accepted, completed, failed, timed out, skipped in mock mode, or not configured. It never labels an approved refund as submitted or completed based on the n8n event.
+
+Only the following fields are sent: event type, case ID, allowlisted resolution type, and a stable case idempotency key (also sent in the `Idempotency-Key` header). Requests use bearer authentication, a configurable timeout, and no automatic retries because a timeout can leave the remote outcome uncertain. n8n validates and echoes the idempotency key; ResolveAI's existing resolved-case guard prevents normal sequential duplicate submissions. Concurrent requests across multiple API workers are not an exactly-once delivery guarantee and require production-grade durable deduplication. Completion is reported and persisted only when the response validates as `completed` and confirms `simulated_notification`. Connection errors, non-success HTTP responses, timeouts, and invalid responses are reported separately from the case resolution. A failed optional integration does not mean n8n completed the workflow, and no raw webhook response or credentials are exposed to the customer UI.
+
+This is a synchronous local demonstration, not a durable production queue: delivery after an ambiguous timeout requires operator review. The n8n container currently uses the existing `latest` image tag; pin and secure the n8n version, credentials, network access, persistence, and TLS before production use. No n8n instance is started or contacted by automated tests.
+
 ---
 
 ## 5. Observability & Tracing

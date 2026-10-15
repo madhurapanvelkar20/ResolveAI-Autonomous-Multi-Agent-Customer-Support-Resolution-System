@@ -1,0 +1,69 @@
+{
+  "name": "ResolveAI - Safe Resolution Event Demo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resolveai-case-event",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "50000005-0000-0000-0000-000000000001",
+      "name": "Approved Case Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 200],
+      "webhookId": "resolveai-case-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst allowedTypes = ['refund', 'replacement', 'return', 'explanation', 'escalation'];\nconst expectedKeys = ['case_id', 'event_idempotency_key', 'event_type', 'resolution_type'];\nif (Object.keys(body).sort().join(',') !== expectedKeys.join(',')) throw new Error('Unexpected event fields');\nif (body.event_type !== 'case.resolution_ready') throw new Error('Unsupported event type');\nif (typeof body.case_id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(body.case_id)) throw new Error('Invalid case id');\nif (body.event_idempotency_key !== `resolveai-case-${body.case_id}`) throw new Error('Invalid idempotency key');\nif (!allowedTypes.includes(body.resolution_type)) throw new Error('Unsupported resolution type');\nreturn [{ json: { status: 'completed', event_idempotency_key: body.event_idempotency_key, demo_result: 'simulated_notification' } }];"
+      },
+      "id": "50000005-0000-0000-0000-000000000002",
+      "name": "Validate and Simulate Safe Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [360, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "50000005-0000-0000-0000-000000000003",
+      "name": "Confirm Simulated Notification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [640, 200]
+    }
+  ],
+  "connections": {
+    "Approved Case Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate and Simulate Safe Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Simulate Safe Event": {
+      "main": [
+        [
+          {
+            "node": "Confirm Simulated Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

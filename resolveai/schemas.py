@@ -30,6 +30,15 @@ EvidenceStatus = Literal[
 ]
 CaseStatus = Literal["open", "resolved", "escalated", "failed"]
 CriticDecision = Literal["approve", "reject", "request_evidence"]
+WorkflowIntegrationStatus = Literal[
+    "not_configured",
+    "mock_skipped",
+    "ineligible",
+    "accepted",
+    "completed",
+    "failed",
+    "timed_out",
+]
 
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -270,6 +279,8 @@ class CaseResult(ContractModel):
     customer_summary: str | None = None
     customer_timeline: list[CustomerTimelineEvent] = Field(default_factory=list)
     financial_action_status: FinancialActionStatus | None = None
+    workflow_integration_status: WorkflowIntegrationStatus | None = None
+    workflow_integration_result: Literal["simulated_notification"] | None = None
 
     @model_validator(mode="after")
     def validate_result_invariants(self):

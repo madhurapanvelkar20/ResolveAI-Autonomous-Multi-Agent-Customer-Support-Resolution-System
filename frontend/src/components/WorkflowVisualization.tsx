@@ -1,5 +1,11 @@
 import React from 'react';
-import { CaseResult, CustomerTimelineEvent, CustomerTimelineStage, FinancialActionStatus } from '../types';
+import {
+  CaseResult,
+  CustomerTimelineEvent,
+  CustomerTimelineStage,
+  FinancialActionStatus,
+  WorkflowIntegrationStatus,
+} from '../types';
 
 interface WorkflowVisualizationProps {
   caseId: string | null;
@@ -48,6 +54,16 @@ const outcomeLabels: Record<string, string> = {
   specialist_review: 'Specialist review',
   resolved: 'Resolved',
   contact_support: 'Contact support',
+};
+
+const workflowIntegrationLabels: Record<WorkflowIntegrationStatus, string> = {
+  not_configured: 'n8n is not configured; no external workflow was called.',
+  mock_skipped: 'Mock mode; no external workflow was called.',
+  ineligible: 'No eligible approved result was sent to an external workflow.',
+  accepted: 'n8n accepted the safe workflow request; completion is not yet confirmed.',
+  completed: 'The safe n8n demonstration workflow completed.',
+  failed: 'The safe n8n workflow failed; completion was not confirmed.',
+  timed_out: 'The safe n8n workflow timed out; completion was not confirmed.',
 };
 
 function resolvedFinancialStatus(result: CaseResult): FinancialActionStatus | null {
@@ -218,6 +234,12 @@ export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
           <p className="response-text">{customerSummary}</p>
           {financialMessage && <p className="financial-status-detail">{financialMessage}</p>}
         </div>
+      )}
+
+      {result?.workflow_integration_status && (
+        <p className="integration-status" role="status">
+          {workflowIntegrationLabels[result.workflow_integration_status]}
+        </p>
       )}
 
       <div className="customer-timeline" aria-label="Case timeline">

@@ -93,6 +93,17 @@
   margin-bottom: 12px;
 }
 
+.integration-status {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .tabs-nav {
   display: flex;
   gap: 12px;

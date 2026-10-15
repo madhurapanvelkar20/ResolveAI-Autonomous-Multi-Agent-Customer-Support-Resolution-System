@@ -52,6 +52,10 @@ class Settings(BaseSettings):
 
     trace_dir: str = "traces"
     tool_transport: ToolTransport = "direct"
+    n8n_enabled: bool = False
+    n8n_webhook_url: str = ""
+    n8n_webhook_token: SecretStr = SecretStr("")
+    n8n_timeout_seconds: float = Field(default=5, gt=0, le=30)
     database_path: str = "data/resolveai.db"
     chroma_dir: str = "data/chroma"
     policy_dir: str = "docs/policies"
