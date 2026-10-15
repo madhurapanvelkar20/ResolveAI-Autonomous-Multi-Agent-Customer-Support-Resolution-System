@@ -9,5 +9,62 @@ services:
     environment:
       APP_NAME: ResolveAI
       APP_VERSION: "0.1.0"
-      ENVIRONMENT: development
+      ENVIRONMENT: production
+      DATABASE_PATH: /app/data/resolveai.db
+      CHROMA_DIR: /app/data/chroma
+      TRACE_DIR: /app/traces
+      POLICY_DIR: /app/docs/policies
+    volumes:
+      - resolveai_data:/app/data
+      - resolveai_traces:/app/traces
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    container_name: resolveai-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: resolveai-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      RESOLVEAI_API_URL: http://api:8000
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: UTC
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n:/workflows:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  resolveai_data:
+  resolveai_traces:
+  n8n_data:

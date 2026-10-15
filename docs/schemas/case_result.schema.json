@@ -1,5 +1,66 @@
 {
   "$defs": {
+    "CustomerTimelineEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "enum": [
+            "case_received",
+            "payment_verification",
+            "order_verification",
+            "policy_review",
+            "evidence_check",
+            "safety_check",
+            "resolution_decision",
+            "next_steps"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "received",
+            "verified",
+            "not_found",
+            "unable_to_verify",
+            "guidance_found",
+            "guidance_not_found",
+            "unavailable",
+            "needs_information",
+            "passed",
+            "not_approved",
+            "needs_review",
+            "proposed",
+            "approved",
+            "rejected",
+            "waiting_for_information",
+            "specialist_review",
+            "resolved",
+            "contact_support"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "explanation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explanation"
+        }
+      },
+      "required": [
+        "stage",
+        "outcome"
+      ],
+      "title": "CustomerTimelineEvent",
+      "type": "object"
+    },
     "Resolution": {
       "additionalProperties": false,
       "properties": {
@@ -158,6 +219,44 @@
       "minLength": 1,
       "title": "Trace Id",
       "type": "string"
+    },
+    "customer_summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Customer Summary"
+    },
+    "customer_timeline": {
+      "items": {
+        "$ref": "#/$defs/CustomerTimelineEvent"
+      },
+      "title": "Customer Timeline",
+      "type": "array"
+    },
+    "financial_action_status": {
+      "anyOf": [
+        {
+          "enum": [
+            "proposed",
+            "approved",
+            "rejected",
+            "submitted",
+            "completed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Financial Action Status"
     }
   },
   "required": [

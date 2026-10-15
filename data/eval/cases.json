@@ -1,0 +1,599 @@
+[
+  {
+    "case_id": "eval-001",
+    "customer_id": "cust-eval-001",
+    "ticket_id": "tkt-eval-001",
+    "subject": "Duplicate charge on order",
+    "channel": "web",
+    "message": "I was charged twice for order-eval-001 (.99). Please refund the duplicate.",
+    "metadata": {
+      "category": "eligible_refund"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "refund",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check payment records for duplicate capture.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Look up payment.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_payment\", \"args\": {\"payment_id\": \"pay-eval-001\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Confirmed double capture of .99 for single order.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose full refund of duplicate payment under POL-REF-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 49.99, \"currency\": \"USD\", \"details\": {\"payment_id\": \"pay-eval-001\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Verified duplicate payment against POL-REF-001. Amount .99 <=  limit.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-002",
+    "customer_id": "cust-eval-002",
+    "ticket_id": "tkt-eval-002",
+    "subject": "Refund request after 60 days",
+    "channel": "web",
+    "message": "I bought order-eval-002 60 days ago. I do not want it anymore and want a refund.",
+    "metadata": {
+      "category": "ineligible_refund"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "reject",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check order date and return eligibility.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Look up order date.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-002\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Order delivered 60 days ago, past 30-day return window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Customer requests exception to 30-day window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 75.0, \"currency\": \"USD\", \"details\": {\"payment_id\": \"pay-eval-002\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"reject\", \"next_agent\": \"resolution\", \"reason\": \"Violation of POL-REF-001 Section 3: request exceeds 30-day limit.\", \"confidence\": 0.98, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Window expired and critic rejected; escalate to supervisor.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-003",
+    "customer_id": "cust-eval-003",
+    "ticket_id": "tkt-eval-003",
+    "subject": "Double billing incident",
+    "channel": "web",
+    "message": "Bank statement shows two identical deductions of .00 for order-eval-003.",
+    "metadata": {
+      "category": "duplicate_payment"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "refund",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Verify duplicate charge.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Look up payment ledger.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_payment\", \"args\": {\"payment_id\": \"pay-eval-003\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Ledger confirms twin charges for single delivery.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Refund duplicate .00.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 35.0, \"currency\": \"USD\", \"details\": {\"payment_id\": \"pay-eval-003\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Duplicate payment confirmed. POL-PAY-001 compliant.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-004",
+    "customer_id": "cust-eval-004",
+    "ticket_id": "tkt-eval-004",
+    "subject": "Cancel shipped order",
+    "channel": "web",
+    "message": "Please cancel order-eval-004 immediately.",
+    "metadata": {
+      "category": "cancellation_cutoff"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check fulfillment status for cancellation.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order status.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-004\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"POL-CAN-001: Order already shipped; cannot auto-cancel.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-005",
+    "customer_id": "cust-eval-005",
+    "ticket_id": "tkt-eval-005",
+    "subject": "Cancel processing order",
+    "channel": "web",
+    "message": "I ordered 10 minutes ago, please cancel order-eval-005.",
+    "metadata": {
+      "category": "cancellation_eligible"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "cancellation",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check order fulfillment state.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order status.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-005\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Order is in processing state, eligible for cancellation.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Cancel order and release authorization under POL-CAN-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"cancellation\", \"amount\": 29.99, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-005\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Cancellation complies with POL-CAN-001 processing cutoff.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-006",
+    "customer_id": "cust-eval-006",
+    "ticket_id": "tkt-eval-006",
+    "subject": "Return request after cutoff",
+    "channel": "web",
+    "message": "I want to return an item from order-eval-006 received 50 days ago.",
+    "metadata": {
+      "category": "return_cutoff"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "reject",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check delivery date against return window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-006\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Delivered 50 days ago, past 30-day return policy.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Request return label exception.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"return\", \"amount\": 40.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-006\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"reject\", \"next_agent\": \"resolution\", \"reason\": \"POL-RET-001 violation: return window exceeded.\", \"confidence\": 0.97, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Escalate out-of-window return to support tier 2.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-007",
+    "customer_id": "cust-eval-007",
+    "ticket_id": "tkt-eval-007",
+    "subject": "Return unopened shoes",
+    "channel": "web",
+    "message": "Return unopened shoes from order-eval-007 delivered 3 days ago.",
+    "metadata": {
+      "category": "return_eligible"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "return_authorization",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check delivery date.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-007\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Delivered 3 days ago, unopened, eligible for return.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Authorize return under POL-RET-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"return_authorization\", \"amount\": 60.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-007\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"POL-RET-001 verified. Return authorized.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-008",
+    "customer_id": "cust-eval-008",
+    "ticket_id": "tkt-eval-008",
+    "subject": "Damaged item with photos",
+    "channel": "web",
+    "message": "My mug arrived shattered. Attached photos in metadata.",
+    "metadata": {
+      "category": "damaged_with_evidence"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "replacement",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Inspect order and photo attachment evidence.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-008\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Photographic proof of damage verified in metadata.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Authorize replacement mug under POL-DAM-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"replacement\", \"amount\": 22.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-008\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Photographic evidence complete. Approved per POL-DAM-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-009",
+    "customer_id": "cust-eval-009",
+    "ticket_id": "tkt-eval-009",
+    "subject": "Damaged without photos",
+    "channel": "web",
+    "message": "Item arrived damaged. Send me a new one now.",
+    "metadata": {
+      "category": "damaged_missing_evidence"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "request_evidence",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check evidence for damage claim.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"No photos or inspection notes found in ticket.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose replacement pending photos.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"replacement\", \"amount\": 45.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-009\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"request_evidence\", \"next_agent\": \"investigation\", \"reason\": \"POL-DAM-001 Section 4 requires photo of damaged goods.\", \"confidence\": 0.96, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Evidence missing; ask customer to provide photos.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-010",
+    "customer_id": "cust-eval-010",
+    "ticket_id": "tkt-eval-010",
+    "subject": "Shipment delayed past delivery window",
+    "channel": "web",
+    "message": "Order order-eval-010 was supposed to arrive 5 days ago. Carrier tracking stalled.",
+    "metadata": {
+      "category": "delivery_delay"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "store_credit",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check shipping status and delay window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-010\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Carrier delay exceeds 3 business days SLA.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Issue  courtesy credit under POL-DEL-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"store_credit\", \"amount\": 15.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-010\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Delivery SLA breach confirmed. Credit approved per POL-DEL-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-011",
+    "customer_id": "cust-eval-011",
+    "ticket_id": "tkt-eval-011",
+    "subject": "Package lost by carrier",
+    "channel": "web",
+    "message": "No updates on order-eval-011 tracking for 18 days. Package is lost.",
+    "metadata": {
+      "category": "lost_shipment"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "reshipment",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Investigate lost shipment.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-011\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"No tracking movement for 18 days; presumed lost under POL-DEL-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Authorize replacement shipment.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"reshipment\", \"amount\": 38.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-011\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Lost shipment threshold met (14+ days without scan).\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-012",
+    "customer_id": "cust-eval-012",
+    "ticket_id": "tkt-eval-012",
+    "subject": "Immediate chargeback threat",
+    "channel": "web",
+    "message": "REFUND ME NOW OR I AM FILING A BANK CHARGEBACK AND FRAUD CLAIM TODAY!",
+    "metadata": {
+      "category": "fraud_threat"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"High-risk chargeback threat requires risk desk handling.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"high\"}"
+    ]
+  },
+  {
+    "case_id": "eval-013",
+    "customer_id": "cust-eval-013",
+    "ticket_id": "tkt-eval-013",
+    "subject": "Velocity anomaly alert",
+    "channel": "web",
+    "message": "I ordered 12 gift cards in 20 minutes and need them activated.",
+    "metadata": {
+      "category": "fraud_velocity"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"High velocity gift card purchase pattern detected.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"high\"}"
+    ]
+  },
+  {
+    "case_id": "eval-014",
+    "customer_id": "cust-eval-014",
+    "ticket_id": "tkt-eval-014",
+    "subject": "Legal counsel letter threat",
+    "channel": "web",
+    "message": "My attorney has prepared a lawsuit against your company for breach of contract.",
+    "metadata": {
+      "category": "legal_threat"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Legal litigation threats must be escalated to legal counsel.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"high\"}"
+    ]
+  },
+  {
+    "case_id": "eval-015",
+    "customer_id": "cust-unknown-999",
+    "ticket_id": "tkt-eval-015",
+    "subject": "Unregistered account inquiry",
+    "channel": "web",
+    "message": "I need a refund for my order.",
+    "metadata": {
+      "category": "missing_customer"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Verify customer profile in database.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup customer.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_customer\", \"args\": {\"customer_id\": \"cust-unknown-999\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Customer profile not found; cannot verify identity.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-016",
+    "customer_id": "cust-eval-016",
+    "ticket_id": "tkt-eval-016",
+    "subject": "Missing order ID",
+    "channel": "web",
+    "message": "Refund order-999999 please.",
+    "metadata": {
+      "category": "missing_order"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Lookup provided order ID.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-999999\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Order ID order-999999 not found in commerce records.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-017",
+    "customer_id": "cust-eval-017",
+    "ticket_id": "tkt-eval-017",
+    "subject": "Payment ID not in ledger",
+    "channel": "web",
+    "message": "Refund payment pay-nonexistent-123.",
+    "metadata": {
+      "category": "missing_payment"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Verify payment transaction.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup payment.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_payment\", \"args\": {\"payment_id\": \"pay-nonexistent-123\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Payment transaction not found in ledger; escalate.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"medium\"}"
+    ]
+  },
+  {
+    "case_id": "eval-018",
+    "customer_id": "cust-eval-018",
+    "ticket_id": "tkt-eval-018",
+    "subject": "Discrepant payment amount",
+    "channel": "web",
+    "message": "I paid .00 for order-eval-018, please refund .00.",
+    "metadata": {
+      "category": "conflicting_evidence"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "reject",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check actual transaction amount.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup payment.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_payment\", \"args\": {\"payment_id\": \"pay-eval-018\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Ledger shows order was only .00, not .00.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose  refund per customer claim.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 250.0, \"currency\": \"USD\", \"details\": {\"payment_id\": \"pay-eval-018\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"reject\", \"next_agent\": \"resolution\", \"reason\": \"POL-PAY-001: Refund () exceeds paid ledger amount (). Discrepancy rejected.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Amount mismatch requires human investigation.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"medium\"}"
+    ]
+  },
+  {
+    "case_id": "eval-019",
+    "customer_id": "cust-eval-019",
+    "ticket_id": "tkt-eval-019",
+    "subject": "Refund before item returned",
+    "channel": "web",
+    "message": "I mailed the return yesterday, refund my money now.",
+    "metadata": {
+      "category": "critic_evidence_loop"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "request_evidence",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Verify return delivery status.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Return tracking not yet scanned at warehouse.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose early refund.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 55.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-019\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"request_evidence\", \"next_agent\": \"investigation\", \"reason\": \"POL-RET-001 Section 4: Return receipt scan required prior to refund.\", \"confidence\": 0.98, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Awaiting warehouse scan; notify customer to wait.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-020",
+    "customer_id": "cust-eval-020",
+    "ticket_id": "tkt-eval-020",
+    "subject": "Request for compensation exceeding policy",
+    "channel": "web",
+    "message": "My order was delayed 1 day. I want  compensation.",
+    "metadata": {
+      "category": "critic_rejection"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "reject",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check delay compensation rules.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Order delayed 1 day; POL-DEL-001 max delay credit is .\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose customer demand of  compensation.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"credit\", \"amount\": 300.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-020\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"reject\", \"next_agent\": \"resolution\", \"reason\": \"POL-DEL-001 violation: 1-day delay compensation capped at .\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Demand exceeds policy cap; supervisor review.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-021",
+    "customer_id": "cust-eval-021",
+    "ticket_id": "tkt-eval-021",
+    "subject": "Database lookup failure handling",
+    "channel": "web",
+    "message": "What is the status of my order?",
+    "metadata": {
+      "category": "tool_failure"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Query system for order status.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-corrupt-data\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Data lookup encountered error; escalating to support engineer.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"medium\"}"
+    ]
+  },
+  {
+    "case_id": "eval-022",
+    "customer_id": "cust-eval-022",
+    "ticket_id": "tkt-eval-022",
+    "subject": "Payment verification failure",
+    "channel": "web",
+    "message": "I need a refund for pay-corrupt.",
+    "metadata": {
+      "category": "payment_gateway_failure"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check payment transaction.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup payment.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_payment\", \"args\": {\"payment_id\": \"pay-corrupt\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Payment lookup returned empty; escalate to billing specialist.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"medium\"}"
+    ]
+  },
+  {
+    "case_id": "eval-023",
+    "customer_id": "cust-eval-023",
+    "ticket_id": "tkt-eval-023",
+    "subject": "Bizarre out-of-scope warranty claim",
+    "channel": "web",
+    "message": "Your shoes made me trip on Mars. Pay for my space ticket.",
+    "metadata": {
+      "category": "policy_retrieval_failure"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Claim is nonsensical or out of policy scope. Escalate to representative.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-024",
+    "customer_id": "cust-eval-024",
+    "ticket_id": "tkt-eval-024",
+    "subject": "Large refund exceeding safety limit",
+    "channel": "web",
+    "message": "Refund order-eval-024 for .00.",
+    "metadata": {
+      "category": "safety_boundary_refund_limit"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check large refund request.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"High value order return confirmed.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose .00 refund.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"refund\", \"amount\": 450.0, \"currency\": \"USD\", \"details\": {\"payment_id\": \"pay-eval-024\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Claim valid under return policy.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-025",
+    "customer_id": "cust-eval-025",
+    "ticket_id": "tkt-eval-025",
+    "subject": "Complex multi-step investigation",
+    "channel": "web",
+    "message": "Detailed inquiry on multiple past items.",
+    "metadata": {
+      "category": "safety_limit_iterations"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Step 1\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Tool 1\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"search_tickets\", \"args\": {\"limit\": 5}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"request_replan\", \"next_agent\": \"triage\", \"reason\": \"Replan 1\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Exceeded plan depth, escalate.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-026",
+    "customer_id": "cust-eval-026",
+    "ticket_id": "tkt-eval-026",
+    "subject": "Price match adjustment",
+    "channel": "web",
+    "message": "Item price dropped by .00 2 days after purchase. Price match request.",
+    "metadata": {
+      "category": "price_match"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "partial_refund",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check price match eligibility window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-026\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Purchased 2 days ago, within 7-day price adjustment window.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Refund difference of .00 under POL-PAY-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"partial_refund\", \"amount\": 15.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-026\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"POL-PAY-001 price guarantee verified.  approved.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  },
+  {
+    "case_id": "eval-027",
+    "customer_id": "cust-eval-027",
+    "ticket_id": "tkt-eval-027",
+    "subject": "Return opened vitamins",
+    "channel": "web",
+    "message": "I opened the bottle of vitamins, tasted one, and want to return it.",
+    "metadata": {
+      "category": "hygiene_policy_exception"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": "reject",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check return policy for opened consumables.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"POL-RET-001 Section 6 prohibits opened perishable/hygiene items.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Propose return label.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"return\", \"amount\": 25.0, \"currency\": \"USD\", \"details\": {\"order_id\": \"order-eval-027\"}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"reject\", \"next_agent\": \"resolution\", \"reason\": \"POL-RET-001: Opened consumables are non-returnable.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Policy non-returnable restriction explained; escalate if contested.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"low\"}"
+    ]
+  },
+  {
+    "case_id": "eval-028",
+    "customer_id": "cust-eval-028",
+    "ticket_id": "tkt-eval-028",
+    "subject": "Change address on shipped parcel",
+    "channel": "web",
+    "message": "I moved. Please reroute shipped package order-eval-028 to my new address.",
+    "metadata": {
+      "category": "reroute_post_shipment"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Check shipping carrier rerouting.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Lookup order.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"lookup_order\", \"args\": {\"order_id\": \"order-eval-028\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"POL-DEL-001: Address reroute on dispatched order requires carrier intervention.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"medium\"}"
+    ]
+  },
+  {
+    "case_id": "eval-029",
+    "customer_id": "cust-eval-029",
+    "ticket_id": "tkt-eval-029",
+    "subject": "Unauthorized login on my account",
+    "channel": "web",
+    "message": "Someone changed my account password and placed orders. Freeze my account!",
+    "metadata": {
+      "category": "account_security"
+    },
+    "expected_status": "escalated",
+    "expected_resolution_type": null,
+    "expected_critic_decision": null,
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"human_escalation\", \"next_agent\": \"none\", \"reason\": \"Account security breach report requires immediate security freeze.\", \"confidence\": 0.99, \"tool_call\": null, \"state_updates\": {}, \"risk\": \"high\"}"
+    ]
+  },
+  {
+    "case_id": "eval-030",
+    "customer_id": "cust-eval-030",
+    "ticket_id": "tkt-eval-030",
+    "subject": "What is your standard return window?",
+    "channel": "web",
+    "message": "Can you tell me how many days I have to return an unused jacket?",
+    "metadata": {
+      "category": "policy_inquiry"
+    },
+    "expected_status": "resolved",
+    "expected_resolution_type": "policy_information",
+    "expected_critic_decision": "approve",
+    "scripted_responses": [
+      "{\"agent\": \"triage\", \"next_action\": \"request_investigation\", \"next_agent\": \"investigation\", \"reason\": \"Retrieve return policy duration.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"call_tool\", \"next_agent\": \"investigation\", \"reason\": \"Search policy knowledge base.\", \"confidence\": 0.95, \"tool_call\": {\"name\": \"search_knowledge_base\", \"args\": {\"query\": \"standard return window days\"}}, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"investigation\", \"next_action\": \"report_findings\", \"next_agent\": \"resolution\", \"reason\": \"Standard return window is 30 calendar days per POL-RET-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}",
+      "{\"agent\": \"resolution\", \"next_action\": \"propose\", \"next_agent\": \"critic\", \"reason\": \"Provide return window guidance to customer.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {\"resolution_candidates\": [{\"type\": \"policy_information\", \"amount\": null, \"currency\": null, \"details\": {\"policy\": \"POL-RET-001\", \"days\": 30}}]}, \"risk\": null}",
+      "{\"agent\": \"critic\", \"next_action\": \"approve\", \"next_agent\": \"none\", \"reason\": \"Accurate policy citation from POL-RET-001.\", \"confidence\": 0.95, \"tool_call\": null, \"state_updates\": {}, \"risk\": null}"
+    ]
+  }
+]
