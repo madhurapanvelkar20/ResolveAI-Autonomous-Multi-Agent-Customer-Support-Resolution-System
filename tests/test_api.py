@@ -297,3 +297,139 @@ def test_execute_tool_unknown():
     assert res.status_code == 200
     assert res.json()["ok"] is False
     assert "unknown tool" in res.json()["error"].lower()
+
+
+def test_exact_intake_form_duplicate_payment_resolves_in_mock_mode():
+    """Exact duplicate-payment text from the customer intake form must resolve in mock mode."""
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-001",
+            "message": "I was charged twice for order-demo-001. Please issue a refund for the duplicate charge.",
+            "subject": "Duplicate Payment / Refund (order-demo-001)",
+            "channel": "web",
+            "metadata": {
+                "category": "Duplicate Payment / Refund",
+                "order_id": "order-demo-001",
+            },
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    # Execute workflow in mock mode without passing explicit scenario
+    run_res = client.post(f"/cases/{case_id}/run", json={"mock": True})
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] == "resolved"
+    assert data["result"]["status"] == "resolved"
+    assert data["result"]["critic_decision"] == "approve"
+    assert data["result"]["resolution"]["type"] == "refund"
+    assert float(data["result"]["resolution"]["amount"]) == 49.99
+
+    # Verify Action Gate executed refund in database
+    get_res = client.get(f"/cases/{case_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] == "resolved"
+
+
+def test_duplicate_payment_verified_evidence_approved_mock_mode():
+    """Case with verified ledger evidence follows approved resolution path in mock mode."""
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-001",
+            "message": "Please refund duplicate charge for order-demo-001",
+            "subject": "Duplicate charge on order-demo-001",
+            "channel": "web",
+            "metadata": {
+                "category": "Duplicate Payment / Refund",
+                "order_id": "order-demo-001",
+                "scenario": "eligible_refund",
+            },
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(f"/cases/{case_id}/run", json={"mock": True})
+    assert run_res.status_code == 200
+    assert run_res.json()["status"] == "resolved"
+    assert run_res.json()["result"]["critic_decision"] == "approve"
+
+
+def test_unknown_ambiguous_case_asks_customer_not_falsely_resolved():
+    """Ambiguous complaint without order reference requests info and is never falsely marked resolved."""
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-unknown-123",
+            "message": "Where is my order? I have not received any updates.",
+            "subject": "Order inquiry",
+            "channel": "web",
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(f"/cases/{case_id}/run", json={"mock": True})
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] != "resolved"
+    assert data["status"] == "escalated"
+    # Verify it asks customer for missing order reference rather than blind fallback
+    assert "order reference" in data["result"]["escalation_reason"].lower()
+    assert data["result"]["resolution"] is None
+
+
+def test_unknown_order_reference_investigates_and_escalates_not_resolved():
+    """Unknown order reference causes investigation tool call and is never falsely marked resolved."""
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-001",
+            "message": "Check status on order-unknown-99999",
+            "subject": "Order inquiry (order-unknown-99999)",
+            "channel": "web",
+            "metadata": {"order_id": "order-unknown-99999"},
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(f"/cases/{case_id}/run", json={"mock": True})
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] != "resolved"
+    assert data["status"] == "escalated"
+    assert "not found" in data["result"]["escalation_reason"].lower() or "not be verified" in data["result"]["escalation_reason"].lower()
+    assert data["result"]["resolution"] is None
+
+
+def test_high_risk_fraud_genuinely_escalates():
+    """Threatening lawsuit or chargeback triggers genuine fraud escalation."""
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-999",
+            "message": "SEND ME $800 CASH RIGHT NOW OR MY LAWYERS WILL SUE AND I WILL CHARGEBACK IMMEDIATELY!",
+            "subject": "High Risk Demand",
+            "channel": "web",
+            "metadata": {"category": "High Risk / Escalation"},
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(f"/cases/{case_id}/run", json={"mock": True})
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] == "escalated"
+    assert data["status"] != "resolved"
+    assert "fraud" in data["result"]["escalation_reason"].lower() or "risk" in data["result"]["escalation_reason"].lower()
+    assert data["result"]["resolution"] is None

@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from resolveai import database
 from resolveai.config import get_settings
 from resolveai.llm import ScriptedLLM
-from resolveai.scenarios import ALL_SCENARIOS, run_scenario
+from resolveai.scenarios import ALL_SCENARIOS, resolve_mock_scenario, run_scenario
 from resolveai.schemas import Channel, ID_PATTERN, TicketIn
 from resolveai.tools import execute_tool
 from resolveai.tracing import TraceLogger, load_trace
@@ -42,6 +42,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
@@ -66,12 +70,23 @@ def _ensure_tables(db_path: Path | str) -> None:
                 status TEXT NOT NULL DEFAULT 'open',
                 trace_id TEXT,
                 result_json TEXT,
+                metadata_json TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
             );
             """
         )
+        # Add metadata_json column if cases table already existed without it
+        try:
+            existing_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(cases)").fetchall()
+            }
+            if "metadata_json" not in existing_columns:
+                connection.execute("ALTER TABLE cases ADD COLUMN metadata_json TEXT")
+        except Exception:
+            pass
 
 
 class CaseCreateIn(BaseModel):
@@ -204,13 +219,14 @@ def create_case(payload: CaseCreateIn):
             )
 
         # Insert or update cases table
+        meta_str = json.dumps(payload.metadata) if payload.metadata else None
         connection.execute(
             """
             INSERT OR REPLACE INTO cases
-                (case_id, ticket_id, customer_id, status, updated_at)
-            VALUES (?, ?, ?, 'open', CURRENT_TIMESTAMP)
+                (case_id, ticket_id, customer_id, status, metadata_json, updated_at)
+            VALUES (?, ?, ?, 'open', ?, CURRENT_TIMESTAMP)
             """,
-            (case_id, ticket_id, payload.customer_id),
+            (case_id, ticket_id, payload.customer_id, meta_str),
         )
 
         row = connection.execute(
@@ -226,6 +242,7 @@ def create_case(payload: CaseCreateIn):
         "channel": payload.channel,
         "subject": payload.subject,
         "message": payload.message,
+        "metadata": payload.metadata,
         "created_at": row["created_at"] if row else datetime.now(timezone.utc).isoformat(),
     }
 
@@ -283,6 +300,13 @@ def get_case(case_id: str):
         except json.JSONDecodeError:
             result_data = None
 
+    meta_data = {}
+    if "metadata_json" in row.keys() and row["metadata_json"]:
+        try:
+            meta_data = json.loads(row["metadata_json"])
+        except json.JSONDecodeError:
+            meta_data = {}
+
     return {
         "case_id": row["case_id"],
         "ticket_id": row["ticket_id"],
@@ -292,6 +316,7 @@ def get_case(case_id: str):
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "result": result_data,
+        "metadata": meta_data,
     }
 
 
@@ -360,13 +385,20 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
             detail=f"Associated ticket '{ticket_id}' not found",
         )
 
+    case_meta = {}
+    if "metadata_json" in case_row.keys() and case_row["metadata_json"]:
+        try:
+            case_meta = json.loads(case_row["metadata_json"])
+        except json.JSONDecodeError:
+            case_meta = {}
+
     ticket = TicketIn(
         ticket_id=ticket_record["ticket_id"],
         customer_id=ticket_record["customer_id"],
         message=ticket_record["message"],
         channel=ticket_record["channel"],
         timestamp=ticket_record["created_at"],
-        metadata={"subject": ticket_record["subject"]},
+        metadata={"subject": ticket_record["subject"], **case_meta},
     )
 
     mock_mode = payload.mock if payload else False
@@ -375,51 +407,24 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
     tracer = TraceLogger(trace_dir=current_settings.trace_dir)
 
     try:
-        if scenario_choice:
-            if scenario_choice not in ALL_SCENARIOS:
+        if scenario_choice or mock_mode:
+            target_scenario = scenario_choice or ticket.metadata.get("scenario")
+            try:
+                responses = resolve_mock_scenario(
+                    ticket=ticket,
+                    explicit_scenario=target_scenario,
+                    db_path=current_settings.database_path,
+                )
+            except ValueError as ve:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unknown scenario '{scenario_choice}'. Choose from: {list(ALL_SCENARIOS.keys())}",
+                    detail=str(ve),
                 )
-            demo_sc = ALL_SCENARIOS[scenario_choice]
             workflow = ResolveAIWorkflow(
                 settings=current_settings,
-                llm=ScriptedLLM(demo_sc.scripted_responses),
+                llm=ScriptedLLM(responses),
                 tracer=tracer,
             )
-        elif mock_mode:
-            # Deterministic mock based on matching scenario or safe fallback
-            matched_responses = None
-            for s_obj in ALL_SCENARIOS.values():
-                if (
-                    s_obj.ticket.ticket_id == ticket.ticket_id
-                    or s_obj.ticket.message.strip() == ticket.message.strip()
-                ):
-                    matched_responses = s_obj.scripted_responses
-                    break
-
-            if matched_responses:
-                workflow = ResolveAIWorkflow(
-                    settings=current_settings,
-                    llm=ScriptedLLM(matched_responses),
-                    tracer=tracer,
-                )
-            else:
-                default_script = [
-                    json.dumps({
-                        "agent": "triage",
-                        "next_action": "human_escalation",
-                        "next_agent": "none",
-                        "reason": "Escalated to human supervisor for review (mock mode).",
-                        "confidence": 0.95,
-                        "risk": "medium",
-                    })
-                ]
-                workflow = ResolveAIWorkflow(
-                    settings=current_settings,
-                    llm=ScriptedLLM(default_script),
-                    tracer=tracer,
-                )
         else:
             workflow = ResolveAIWorkflow(
                 settings=current_settings,

@@ -20,6 +20,7 @@ from resolveai.schemas import (
     CaseResult,
     CaseState,
     CriticFeedback,
+    CustomerTimelineEvent,
     Evidence,
     TicketIn,
 )
@@ -82,6 +83,236 @@ def _dump_state(state: CaseState) -> dict[str, Any]:
     return state.model_dump(mode="json")
 
 
+def _customer_result_details(
+    state: CaseState,
+    status: str,
+    critic_decision: str | None,
+) -> tuple[list[CustomerTimelineEvent], str, str | None]:
+    timeline = [
+        CustomerTimelineEvent(stage="case_received", outcome="received")
+    ]
+    payment_verified = False
+    policy_guidance_found = False
+
+    for evidence in state.evidence:
+        tool_name = evidence.source.removeprefix("tool:")
+        details = evidence.details if isinstance(evidence.details, dict) else {}
+        tool_succeeded = evidence.status == "supports"
+        data = details.get("data")
+
+        if tool_name == "lookup_payment":
+            if not tool_succeeded:
+                timeline.append(CustomerTimelineEvent(
+                    stage="payment_verification",
+                    outcome="unable_to_verify",
+                    explanation="We could not verify the payment details.",
+                ))
+            elif data is None:
+                timeline.append(CustomerTimelineEvent(
+                    stage="payment_verification",
+                    outcome="not_found",
+                    explanation="No matching payment record was found.",
+                ))
+            else:
+                payment_verified = True
+                timeline.append(CustomerTimelineEvent(
+                    stage="payment_verification",
+                    outcome="verified",
+                    explanation="A matching payment record was found and checked.",
+                ))
+
+        elif tool_name == "lookup_order":
+            if not tool_succeeded:
+                timeline.append(CustomerTimelineEvent(
+                    stage="order_verification",
+                    outcome="unable_to_verify",
+                    explanation="We could not verify the order details.",
+                ))
+            elif data is None:
+                timeline.append(CustomerTimelineEvent(
+                    stage="order_verification",
+                    outcome="not_found",
+                    explanation="No matching order record was found.",
+                ))
+            else:
+                timeline.append(CustomerTimelineEvent(
+                    stage="order_verification",
+                    outcome="verified",
+                    explanation="The order record was found and checked.",
+                ))
+
+        elif tool_name == "search_knowledge_base":
+            if not tool_succeeded:
+                outcome = "unavailable"
+                explanation = "Policy guidance could not be retrieved for this case."
+            elif isinstance(data, list) and data:
+                policy_guidance_found = True
+                outcome = "guidance_found"
+                explanation = "Policy guidance was retrieved for review."
+            else:
+                outcome = "guidance_not_found"
+                explanation = "No matching policy guidance was found."
+            timeline.append(CustomerTimelineEvent(
+                stage="policy_review",
+                outcome=outcome,
+                explanation=explanation,
+            ))
+
+    information_requested = any(
+        decision.next_action in {"ask_customer", "request_evidence"}
+        for decision in state.agent_decisions
+    )
+    risk_review_required = any(
+        decision.risk in {"medium", "high"}
+        or decision.next_action == "human_escalation"
+        for decision in state.agent_decisions
+    )
+    if information_requested:
+        timeline.append(CustomerTimelineEvent(
+            stage="evidence_check",
+            outcome="needs_information",
+            explanation="More information is needed before a decision can be made.",
+        ))
+
+    safety_reviewed = critic_decision is not None or risk_review_required
+    escalation_reason = (state.escalation_reason or "").lower()
+    limit_review_required = any(
+        marker in escalation_reason
+        for marker in (
+            "exceeds maximum allowed limit",
+            "automatic approval limit",
+            "approval cap",
+            "auto cap",
+        )
+    )
+    if safety_reviewed:
+        if status == "resolved" and critic_decision == "approve":
+            safety_outcome = "passed"
+            safety_explanation = "The proposed resolution passed the automated safety review."
+        elif critic_decision == "reject":
+            safety_outcome = "not_approved"
+            safety_explanation = "The proposed resolution did not pass the automated review."
+        elif information_requested:
+            safety_outcome = "needs_information"
+            safety_explanation = "The review needs more information before it can continue."
+        elif limit_review_required:
+            safety_outcome = "needs_review"
+            safety_explanation = (
+                "The requested refund is above the automatic approval limit."
+            )
+        else:
+            safety_outcome = "needs_review"
+            safety_explanation = "A specialist review is needed before this case can proceed."
+        timeline.append(CustomerTimelineEvent(
+            stage="safety_check",
+            outcome=safety_outcome,
+            explanation=safety_explanation,
+        ))
+
+    candidate = state.selected_resolution
+    if candidate is None and critic_decision == "reject" and state.resolution_candidates:
+        candidate = state.resolution_candidates[-1]
+
+    financial_action_status = None
+    if candidate is not None and candidate.type.lower() == "refund":
+        if critic_decision == "reject":
+            financial_action_status = "rejected"
+        elif status == "resolved" and critic_decision == "approve":
+            financial_action_status = "approved"
+        else:
+            financial_action_status = "proposed"
+
+    if candidate is not None:
+        if financial_action_status == "approved":
+            decision_outcome = "approved"
+            decision_explanation = "The proposed resolution was approved."
+        elif financial_action_status == "rejected" or critic_decision == "reject":
+            decision_outcome = "rejected"
+            decision_explanation = "The proposed resolution was not approved."
+        elif status == "resolved":
+            decision_outcome = "approved"
+            decision_explanation = "The proposed resolution was approved."
+        else:
+            decision_outcome = "proposed"
+            decision_explanation = "A resolution was proposed but has not been approved."
+        timeline.append(CustomerTimelineEvent(
+            stage="resolution_decision",
+            outcome=decision_outcome,
+            explanation=decision_explanation,
+        ))
+    elif critic_decision == "reject":
+        timeline.append(CustomerTimelineEvent(
+            stage="resolution_decision",
+            outcome="rejected",
+            explanation="The proposed resolution was not approved.",
+        ))
+    elif status in {"escalated", "failed"}:
+        timeline.append(CustomerTimelineEvent(
+            stage="resolution_decision",
+            outcome="needs_review",
+            explanation=(
+                "No automated resolution was issued because more information is needed."
+                if information_requested
+                else "No automated resolution was issued for this case."
+            ),
+        ))
+
+    if status == "resolved":
+        next_outcome = "resolved"
+        next_explanation = "The case has been marked resolved."
+    elif information_requested:
+        next_outcome = "waiting_for_information"
+        next_explanation = "The case is waiting for additional information."
+    elif status == "escalated":
+        next_outcome = "specialist_review"
+        next_explanation = "A support specialist will review the case."
+    else:
+        next_outcome = "contact_support"
+        next_explanation = "Please contact support for help completing this case."
+    timeline.append(CustomerTimelineEvent(
+        stage="next_steps",
+        outcome=next_outcome,
+        explanation=next_explanation,
+    ))
+
+    if status == "resolved":
+        if candidate is not None and candidate.type.lower() == "refund":
+            if payment_verified and policy_guidance_found:
+                summary = (
+                    "The refund was approved after a matching payment record was "
+                    "verified and policy guidance was retrieved."
+                )
+            elif payment_verified:
+                summary = "The refund was approved after the payment record was verified."
+            else:
+                summary = "The proposed refund passed review and was approved."
+        else:
+            summary = "The proposed resolution passed review and was approved."
+    elif information_requested:
+        summary = "More information is needed before a decision can be made."
+    elif limit_review_required:
+        summary = (
+            "The requested refund is above the automatic approval limit and needs "
+            "specialist review."
+        )
+    elif critic_decision == "reject":
+        summary = (
+            "The proposed resolution was not approved. A support specialist will "
+            "review the case before a final decision."
+        )
+    elif risk_review_required:
+        summary = (
+            "This case was referred for specialist review because additional risk "
+            "checks are required."
+        )
+    elif status == "escalated":
+        summary = "A support specialist needs to review this case before a decision can be made."
+    else:
+        summary = "The automated review could not be completed. Please contact support."
+
+    return timeline, summary, financial_action_status
+
+
 def _build_result(
     state: CaseState,
     status: str,
@@ -89,6 +320,9 @@ def _build_result(
     trace_id: str,
     critic_decision: str | None = None,
 ) -> CaseResult:
+    customer_timeline, customer_summary, financial_action_status = (
+        _customer_result_details(state, status, critic_decision)
+    )
     return CaseResult(
         case_id=state.case_id,
         status=status,
@@ -103,6 +337,9 @@ def _build_result(
         critic_decision=critic_decision,
         escalation_reason=state.escalation_reason,
         trace_id=trace_id,
+        customer_summary=customer_summary,
+        customer_timeline=customer_timeline,
+        financial_action_status=financial_action_status,
     )
 
 

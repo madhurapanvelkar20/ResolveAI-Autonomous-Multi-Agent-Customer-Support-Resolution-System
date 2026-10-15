@@ -16,12 +16,13 @@ from resolveai.schemas import (
     AgentDecision,
     CaseResult,
     CaseState,
+    Evidence,
     Resolution,
     TicketIn,
 )
 from resolveai.state import CaseStateStore, StatePermissionError
 from resolveai.tracing import TraceLogger, load_trace
-from resolveai.workflow import AGENT_PROMPTS, ResolveAIWorkflow
+from resolveai.workflow import AGENT_PROMPTS, ResolveAIWorkflow, _customer_result_details
 
 
 def make_ticket(
@@ -37,6 +38,79 @@ def make_ticket(
         timestamp=datetime.now(timezone.utc),
         metadata={},
     )
+
+
+def test_customer_timeline_uses_verified_facts_without_internal_payloads():
+    state = CaseState(case_id="case-TICKET-401", ticket=make_ticket())
+    state.evidence = [
+        Evidence(
+            source="tool:lookup_payment",
+            status="supports",
+            summary="contains internal payment data",
+            details={
+                "ok": True,
+                "data": {"payment_id": "pay-private-001", "status": "paid"},
+            },
+        ),
+        Evidence(
+            source="tool:search_knowledge_base",
+            status="supports",
+            summary="contains internal policy text",
+            details={
+                "ok": True,
+                "data": [{"source": "POL-PRIVATE-001", "text": "internal policy text"}],
+            },
+        ),
+    ]
+    state.selected_resolution = Resolution(
+        type="refund",
+        amount=49.99,
+        currency="USD",
+        action_id="pay-private-001",
+        details={"reason": "private resolution detail"},
+    )
+
+    timeline, summary, financial_status = _customer_result_details(
+        state, "resolved", "approve"
+    )
+    stages = {event.stage: event for event in timeline}
+    assert stages["payment_verification"].outcome == "verified"
+    assert stages["policy_review"].outcome == "guidance_found"
+    assert stages["safety_check"].outcome == "passed"
+    assert stages["resolution_decision"].outcome == "approved"
+    assert stages["next_steps"].outcome == "resolved"
+    assert financial_status == "approved"
+    assert "payment record was verified" in summary
+    public_text = json.dumps({
+        "summary": summary,
+        "timeline": [event.model_dump() for event in timeline],
+    })
+    assert "pay-private-001" not in public_text
+    assert "POL-PRIVATE-001" not in public_text
+    assert "internal policy text" not in public_text
+    assert "private resolution detail" not in public_text
+
+
+def test_customer_timeline_marks_customer_information_as_pending():
+    state = CaseState(case_id="case-TICKET-402", ticket=make_ticket())
+    state.agent_decisions = [
+        AgentDecision(
+            agent="triage",
+            next_action="ask_customer",
+            next_agent="none",
+            reason="A photo is required to review the damage claim.",
+            confidence=0.9,
+        )
+    ]
+
+    timeline, summary, financial_status = _customer_result_details(
+        state, "escalated", None
+    )
+    stages = {event.stage: event for event in timeline}
+    assert stages["evidence_check"].outcome == "needs_information"
+    assert stages["next_steps"].outcome == "waiting_for_information"
+    assert "more information is needed" in summary.lower()
+    assert financial_status is None
 
 
 def test_four_agents_distinct_responsibilities_and_prompts():
@@ -336,3 +410,109 @@ def test_all_five_scenarios_execute_and_verify(tmp_path: Path):
         assert len(events) >= 2
         assert events[0].event == "case_start"
         assert events[-1].event == "final"
+
+
+def test_refund_amount_exceeding_policy_limit_escalates_safely(tmp_path: Path):
+    """A proposed refund that exceeds the system max_refund_amount must be escalated at critic check."""
+    responses = [
+        make_decision("triage", "request_investigation", "investigation", reason="Review order claim"),
+        make_decision("investigation", "report_findings", "resolution", reason="Investigated high value item"),
+        make_decision(
+            "resolution",
+            "propose",
+            "critic",
+            reason="Propose large refund",
+            state_updates={
+                "resolution_candidates": [
+                    {
+                        "type": "refund",
+                        "amount": 250.00,
+                        "currency": "USD",
+                        "action_id": "pay-large-001",
+                        "details": {"reason": "Customer unhappy with order"},
+                    }
+                ]
+            },
+        ),
+        make_decision(
+            "critic",
+            "approve",
+            "none",
+            reason="Attempting to approve over-limit refund",
+            confidence=0.9,
+        ),
+    ]
+
+    tracer = TraceLogger(trace_dir=str(tmp_path))
+    settings = Settings(
+        _env_file=None,
+        trace_dir=str(tmp_path),
+        max_refund_amount=100.0,  # Strict cap of $100
+    )
+    workflow = ResolveAIWorkflow(
+        settings=settings,
+        llm=ScriptedLLM(responses),
+        tracer=tracer,
+    )
+
+    result = workflow.run(make_ticket())
+    assert result.status == "escalated"
+    assert "exceeds maximum allowed limit" in result.escalation_reason.lower()
+    assert "$250" in result.escalation_reason
+    assert "$100" in result.escalation_reason
+
+
+def test_critic_rejection_routes_back_to_resolution_for_escalation(tmp_path: Path):
+    """Critic rejection invalidates candidate and routes to resolution for human escalation."""
+    responses = [
+        make_decision("triage", "request_investigation", "investigation", reason="Triage intake"),
+        make_decision("investigation", "report_findings", "resolution", reason="Investigation findings"),
+        make_decision(
+            "resolution",
+            "propose",
+            "critic",
+            reason="Propose refund without evidence",
+            state_updates={
+                "resolution_candidates": [
+                    {
+                        "type": "refund",
+                        "amount": 35.00,
+                        "currency": "USD",
+                        "action_id": "pay-001",
+                    }
+                ]
+            },
+        ),
+        # Critic rejects the proposed resolution
+        make_decision(
+            "critic",
+            "reject",
+            "resolution",
+            reason="No verified payment receipt or duplicate charge confirmation found.",
+            confidence=0.95,
+        ),
+        # Resolution receives rejection and escalates to human
+        make_decision(
+            "resolution",
+            "human_escalation",
+            "none",
+            reason="Critic rejected proposed refund due to lack of verified evidence. Escalating to human.",
+            confidence=0.99,
+            risk="medium",
+        ),
+    ]
+
+    tracer = TraceLogger(trace_dir=str(tmp_path))
+    settings = Settings(_env_file=None, trace_dir=str(tmp_path))
+    workflow = ResolveAIWorkflow(
+        settings=settings,
+        llm=ScriptedLLM(responses),
+        tracer=tracer,
+    )
+
+    result = workflow.run(make_ticket())
+    assert result.status == "escalated"
+    assert "critic rejected" in result.escalation_reason.lower()
+    assert result.resolution is None
+    assert "critic" in result.agents_involved
+

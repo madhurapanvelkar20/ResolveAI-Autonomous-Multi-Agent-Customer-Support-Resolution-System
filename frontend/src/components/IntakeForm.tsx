@@ -8,6 +8,8 @@ interface IntakeFormProps {
     channel: 'web' | 'email' | 'chat';
     ticket_id?: string;
     mock: boolean;
+    scenario?: string;
+    metadata?: Record<string, any>;
   }) => Promise<void>;
   isLoading: boolean;
 }
@@ -51,19 +53,42 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
 
     const fullSubject = `${category}${orderRef ? ` (${orderRef.trim()})` : ''}`;
 
+    let scenarioId: string | undefined = undefined;
+    if (category.toLowerCase().includes('duplicate') || cleanCustomerId === 'cust-demo-001') {
+      scenarioId = 'eligible_refund';
+    } else if (category.toLowerCase().includes('delay') || cleanCustomerId === 'cust-demo-002') {
+      scenarioId = 'delivery_delay';
+    } else if (category.toLowerCase().includes('high risk') || cleanCustomerId === 'cust-demo-999') {
+      scenarioId = 'fraud_high_risk';
+    } else if (category.toLowerCase().includes('damaged')) {
+      scenarioId = 'damaged_product';
+    }
+
     onSubmit({
       customer_id: cleanCustomerId,
       message: cleanMessage,
       subject: fullSubject,
       channel,
       mock: isMockMode,
+      scenario: scenarioId,
+      metadata: {
+        category,
+        order_id: orderRef.trim() || undefined,
+        scenario: scenarioId,
+      },
     });
   };
 
-  const setDemoCustomer = (id: string, presetMsg: string, presetCat: string) => {
+  const setDemoCustomer = (
+    id: string,
+    presetMsg: string,
+    presetCat: string,
+    presetOrderRef: string = ''
+  ) => {
     setCustomerId(id);
     setMessage(presetMsg);
     setCategory(presetCat);
+    setOrderRef(presetOrderRef);
     setValidationError(null);
   };
 
@@ -81,7 +106,8 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
             setDemoCustomer(
               'cust-demo-001',
               'I was charged twice for order-demo-001. Please issue a refund for the duplicate charge.',
-              'Duplicate Payment'
+              'Duplicate Payment / Refund',
+              'order-demo-001'
             )
           }
         >
@@ -94,7 +120,8 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
             setDemoCustomer(
               'cust-demo-002',
               'My package for order-demo-002 is 6 days late. Where is my delivery?',
-              'Delivery Delay'
+              'Delivery / Shipping Delay',
+              'order-demo-002'
             )
           }
         >
@@ -107,7 +134,8 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
             setDemoCustomer(
               'cust-demo-999',
               'SEND ME $800 CASH RIGHT NOW OR MY LAWYERS WILL SUE AND I WILL CHARGEBACK IMMEDIATELY!',
-              'High Risk'
+              'High Risk / Escalation',
+              ''
             )
           }
         >

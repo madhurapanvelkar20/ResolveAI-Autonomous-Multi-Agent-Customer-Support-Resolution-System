@@ -8,6 +8,29 @@ export interface Resolution {
   details?: Record<string, any>;
 }
 
+export type CustomerTimelineStage =
+  | 'case_received'
+  | 'payment_verification'
+  | 'order_verification'
+  | 'policy_review'
+  | 'evidence_check'
+  | 'safety_check'
+  | 'resolution_decision'
+  | 'next_steps';
+
+export interface CustomerTimelineEvent {
+  stage: CustomerTimelineStage;
+  outcome: string;
+  explanation?: string | null;
+}
+
+export type FinancialActionStatus =
+  | 'proposed'
+  | 'approved'
+  | 'rejected'
+  | 'submitted'
+  | 'completed';
+
 export interface CaseResult {
   case_id: string;
   status: 'resolved' | 'escalated' | 'failed';
@@ -20,6 +43,9 @@ export interface CaseResult {
   critic_decision?: 'approve' | 'reject' | 'request_evidence' | null;
   escalation_reason?: string | null;
   trace_id: string;
+  customer_summary?: string | null;
+  customer_timeline?: CustomerTimelineEvent[];
+  financial_action_status?: FinancialActionStatus | null;
 }
 
 export interface CaseRecord {

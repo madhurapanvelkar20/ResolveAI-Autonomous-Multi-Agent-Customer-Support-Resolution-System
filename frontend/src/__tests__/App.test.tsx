@@ -24,8 +24,11 @@ describe('App Component', () => {
     });
   });
 
-  it('switches between tabs', () => {
+  it('switches between tabs', async () => {
     render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText(/Backend: Online/i)).toBeInTheDocument();
+    });
 
     const scenarioTab = screen.getByRole('button', { name: /Benchmark Scenarios/i });
     fireEvent.click(scenarioTab);
@@ -70,8 +73,9 @@ describe('App Component', () => {
           ts: '2026-10-13T10:00:00Z',
           case_id: 'case-demo-1',
           iteration: 1,
-          event: 'case_start',
-          message: 'Case started',
+          agent: 'triage',
+          event: 'agent_decision',
+          reason_summary: 'Internal trace detail',
         },
       ],
       event_count: 1,
@@ -85,8 +89,59 @@ describe('App Component', () => {
     fireEvent.click(runBtn);
 
     await waitFor(() => {
-      expect(screen.getByText('RESOLVED')).toBeInTheDocument();
-      expect(screen.getByText(/Refund processed successfully/i)).toBeInTheDocument();
+      expect(screen.getByText('REFUND APPROVED')).toBeInTheDocument();
+      expect(screen.getByText(/Your refund.*was approved/i)).toBeInTheDocument();
+      expect(screen.getByText('Deterministic Mock Mode')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Triage Agent|Investigation Agent|Resolution Agent|Critic Agent/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Execution Trace Timeline/i)).not.toBeInTheDocument();
+
+    expect(api.getCaseTrace).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Safety Testing Panel/i }));
+    expect(screen.getByText(/Execution Trace Timeline/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/agent_decision \(triage\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Internal trace detail/i)).toBeInTheDocument();
+    });
+    expect(api.getCaseTrace).toHaveBeenCalledWith('case-demo-1');
+  });
+
+  it('displays offline status, warning banner, and retry connection button when backend fails', async () => {
+    vi.mocked(api.checkHealth).mockRejectedValueOnce(new Error('Network error'));
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Backend: Offline/i)).toBeInTheDocument();
+      expect(screen.getByText(/Backend Unreachable:/i)).toBeInTheDocument();
+    });
+
+    const retryBtn = screen.getByRole('button', { name: /Retry Connection/i });
+    expect(retryBtn).toBeInTheDocument();
+
+    // Mock success for retry
+    vi.mocked(api.checkHealth).mockResolvedValueOnce({
+      status: 'ok',
+      app: 'ResolveAI',
+      version: '0.1.0',
+      providers: ['ollama'],
+    });
+
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Backend: Online/i)).toBeInTheDocument();
     });
   });
+
+  it('polls health periodically and cleans up timer on unmount', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+
+    const { unmount } = render(<App />);
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
+
+    unmount();
+    expect(clearIntervalSpy).toHaveBeenCalled();
+  });
 });
+

@@ -212,6 +212,49 @@ class CaseState(ContractModel):
     escalation_reason: str | None = None
 
 
+CustomerTimelineStage = Literal[
+    "case_received",
+    "payment_verification",
+    "order_verification",
+    "policy_review",
+    "evidence_check",
+    "safety_check",
+    "resolution_decision",
+    "next_steps",
+]
+
+CustomerTimelineOutcome = Literal[
+    "received",
+    "verified",
+    "not_found",
+    "unable_to_verify",
+    "guidance_found",
+    "guidance_not_found",
+    "unavailable",
+    "needs_information",
+    "passed",
+    "not_approved",
+    "needs_review",
+    "proposed",
+    "approved",
+    "rejected",
+    "waiting_for_information",
+    "specialist_review",
+    "resolved",
+    "contact_support",
+]
+
+FinancialActionStatus = Literal[
+    "proposed", "approved", "rejected", "submitted", "completed"
+]
+
+
+class CustomerTimelineEvent(ContractModel):
+    stage: CustomerTimelineStage
+    outcome: CustomerTimelineOutcome
+    explanation: str | None = None
+
+
 class CaseResult(ContractModel):
     case_id: str
     status: Literal["resolved", "escalated", "failed"]
@@ -224,6 +267,9 @@ class CaseResult(ContractModel):
     critic_decision: CriticDecision | None = None
     escalation_reason: str | None = None
     trace_id: str = Field(min_length=1)
+    customer_summary: str | None = None
+    customer_timeline: list[CustomerTimelineEvent] = Field(default_factory=list)
+    financial_action_status: FinancialActionStatus | None = None
 
     @model_validator(mode="after")
     def validate_result_invariants(self):

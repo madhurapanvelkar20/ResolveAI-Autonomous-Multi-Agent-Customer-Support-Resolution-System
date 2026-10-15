@@ -1,27 +1,138 @@
 import React from 'react';
-import { CaseResult, TraceEvent } from '../types';
+import { CaseResult, CustomerTimelineEvent, CustomerTimelineStage, FinancialActionStatus } from '../types';
 
 interface WorkflowVisualizationProps {
   caseId: string | null;
   result: CaseResult | null;
-  traceEvents: TraceEvent[];
   isLoading: boolean;
   error: string | null;
+  isMock?: boolean;
+}
+
+const MockModeIndicator = () => (
+  <span className="mode-badge-mock">Deterministic Mock Mode</span>
+);
+
+function formatAmount(amount: number | string | null | undefined, currency?: string | null) {
+  if (amount === null || amount === undefined || amount === '') return '';
+  return currency === 'USD' || !currency ? ` $${amount}` : ` ${currency} ${amount}`;
+}
+
+const stageTitles: Record<CustomerTimelineStage, string> = {
+  case_received: 'Complaint received',
+  payment_verification: 'Payment verification',
+  order_verification: 'Order verification',
+  policy_review: 'Policy review',
+  evidence_check: 'Evidence and information check',
+  safety_check: 'Risk and safety review',
+  resolution_decision: 'Resolution decision',
+  next_steps: 'Next steps',
+};
+
+const outcomeLabels: Record<string, string> = {
+  received: 'Received',
+  verified: 'Verified',
+  not_found: 'Not found',
+  unable_to_verify: 'Could not verify',
+  guidance_found: 'Guidance found',
+  guidance_not_found: 'No matching guidance',
+  unavailable: 'Unavailable',
+  needs_information: 'More information needed',
+  passed: 'Passed',
+  not_approved: 'Not approved',
+  needs_review: 'Review needed',
+  proposed: 'Proposed',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  waiting_for_information: 'Waiting for information',
+  specialist_review: 'Specialist review',
+  resolved: 'Resolved',
+  contact_support: 'Contact support',
+};
+
+function resolvedFinancialStatus(result: CaseResult): FinancialActionStatus | null {
+  if (result.financial_action_status) return result.financial_action_status;
+  if (result.resolution?.type.toLowerCase() !== 'refund') return null;
+  if (result.status === 'resolved' && result.critic_decision === 'approve') return 'approved';
+  if (result.critic_decision === 'reject') return 'rejected';
+  return 'proposed';
+}
+
+function refundMessage(
+  status: FinancialActionStatus,
+  result: CaseResult,
+): string {
+  const amount = formatAmount(result.resolution?.amount, result.resolution?.currency);
+  switch (status) {
+    case 'approved':
+      return `Your refund${amount} was approved. The backend has not confirmed that it was submitted or completed.`;
+    case 'submitted':
+      return `Your refund${amount} was submitted.`;
+    case 'completed':
+      return `Your refund${amount} was completed.`;
+    case 'rejected':
+      return 'The proposed refund was not approved. A support specialist will review the case.';
+    default:
+      return `A refund${amount} was proposed, but it has not been approved.`;
+  }
+}
+
+function fallbackTimeline(
+  result: CaseResult | null,
+  caseId: string | null,
+  financialStatus: FinancialActionStatus | null,
+): CustomerTimelineEvent[] {
+  const events: CustomerTimelineEvent[] = [];
+  if (caseId || result) events.push({ stage: 'case_received', outcome: 'received' });
+  if (financialStatus) {
+    events.push({
+      stage: 'resolution_decision',
+      outcome: financialStatus,
+    });
+  } else if (result?.status === 'resolved') {
+    events.push({
+      stage: 'resolution_decision',
+      outcome: 'approved',
+      explanation: result.customer_summary || 'The proposed resolution was approved.',
+    });
+  }
+  if (result?.status === 'escalated') {
+    const waiting = result.customer_timeline?.some(
+      (event) => event.outcome === 'waiting_for_information'
+    );
+    events.push({
+      stage: 'next_steps',
+      outcome: waiting ? 'waiting_for_information' : 'specialist_review',
+      explanation: result.customer_summary || 'A support specialist needs to review this case.',
+    });
+  } else if (result?.status === 'failed') {
+    events.push({
+      stage: 'next_steps',
+      outcome: 'contact_support',
+      explanation: result.customer_summary || 'Please contact support for help completing this case.',
+    });
+  }
+  return events;
 }
 
 export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
   caseId,
   result,
-  traceEvents,
   isLoading,
   error,
+  isMock,
 }) => {
+  const mockIndicator = isMock && (caseId || result || isLoading || error)
+    ? <MockModeIndicator />
+    : null;
+
   if (isLoading) {
     return (
       <div className="card result-card loading-state">
+        {mockIndicator}
         <div className="spinner"></div>
-        <h3>Orchestrating Multi-Agent Workflow...</h3>
-        <p>Triage, Investigation, Resolution, and Critic agents are interacting.</p>
+        <h3>Reviewing your case</h3>
+        <p>Checking the information provided and the relevant support policies.</p>
       </div>
     );
   }
@@ -29,6 +140,7 @@ export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
   if (error) {
     return (
       <div className="card result-card error-state">
+        {mockIndicator}
         <div className="status-banner banner-failed">
           <h3>Workflow Error</h3>
           <p>{error}</p>
@@ -46,153 +158,86 @@ export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'resolved':
-        return <span className="badge badge-success">RESOLVED</span>;
-      case 'escalated':
-        return <span className="badge badge-warning">ESCALATED</span>;
-      case 'failed':
-        return <span className="badge badge-danger">FAILED</span>;
-      default:
-        return <span className="badge badge-info">{status.toUpperCase()}</span>;
-    }
-  };
-
-  // Extract agent decisions and tools from trace events
-  const agentDecisions = traceEvents.filter((e) => e.event === 'agent_decision');
-  const toolCalls = traceEvents.filter((e) => e.event === 'tool_call' || e.event === 'tool_result');
-  const policyReferences = traceEvents
-    .filter((e) => e.input_refs && e.input_refs.length > 0)
-    .flatMap((e) => e.input_refs || []);
-
-  const triageEvent = agentDecisions.find((e) => e.agent === 'triage');
-  const investigationEvent = agentDecisions.find((e) => e.agent === 'investigation');
-  const resolutionEvent = agentDecisions.find((e) => e.agent === 'resolution');
-  const criticEvent = agentDecisions.find((e) => e.agent === 'critic');
+  const financialStatus = result ? resolvedFinancialStatus(result) : null;
+  const waitingForInformation = result?.customer_timeline?.some(
+    (event) => event.outcome === 'waiting_for_information'
+  );
+  const statusLabel = financialStatus === 'approved'
+    ? 'REFUND APPROVED'
+    : financialStatus === 'proposed'
+    ? 'REFUND PROPOSED'
+    : financialStatus === 'rejected'
+    ? 'REFUND NOT APPROVED'
+    : financialStatus === 'submitted'
+    ? 'REFUND SUBMITTED'
+    : financialStatus === 'completed'
+    ? 'REFUND COMPLETED'
+    : result?.status === 'resolved'
+    ? 'RESOLVED'
+    : result?.status === 'escalated'
+    ? waitingForInformation
+      ? 'WAITING FOR INFORMATION'
+      : 'SPECIALIST REVIEW'
+    : 'REVIEW INCOMPLETE';
+  const statusClass = financialStatus === 'approved' || financialStatus === 'completed' || result?.status === 'resolved'
+    ? 'badge-success'
+    : result?.status === 'escalated' || financialStatus === 'proposed' || financialStatus === 'submitted'
+    ? 'badge-warning'
+    : 'badge-danger';
+  const customerSummary = result
+    ? result.customer_summary || (financialStatus
+      ? refundMessage(financialStatus, result)
+      : result.status === 'escalated'
+        ? 'A support specialist needs to review this case before a decision can be made.'
+        : result.status === 'failed'
+        ? 'The automated review could not be completed. Please contact support.'
+        : result.customer_response)
+    : null;
+  const financialMessage = result && financialStatus && result.customer_summary
+    ? refundMessage(financialStatus, result)
+    : null;
+  const events = result?.customer_timeline?.length
+    ? result.customer_timeline
+    : fallbackTimeline(result, caseId, financialStatus);
 
   return (
     <div className="card result-card">
       <div className="result-header">
         <div>
-          <h2>Case Execution: {caseId || result?.case_id}</h2>
-          <span className="trace-tag">Trace ID: {result?.trace_id || 'N/A'}</span>
+          <h2>Case update</h2>
+          {(caseId || result) && (
+            <p className="case-reference">Case reference: {caseId || result?.case_id}</p>
+          )}
+          {mockIndicator}
         </div>
-        <div>{result && getStatusBadge(result.status)}</div>
+        <div>{result && <span className={`badge ${statusClass}`}>{statusLabel}</span>}</div>
       </div>
 
       {result && (
         <div className="summary-banner">
-          <h4>Customer Facing Response:</h4>
-          <p className="response-text">{result.customer_response}</p>
-          {result.escalation_reason && (
-            <div className="alert alert-warning">
-              <strong>Escalation Reason:</strong> {result.escalation_reason}
-            </div>
-          )}
-          {result.resolution && (
-            <div className="alert alert-success">
-              <strong>Approved Resolution:</strong> {result.resolution.type}
-              {result.resolution.amount && ` — $${result.resolution.amount} ${result.resolution.currency || 'USD'}`}
-            </div>
-          )}
+          <p className="response-text">{customerSummary}</p>
+          {financialMessage && <p className="financial-status-detail">{financialMessage}</p>}
         </div>
       )}
 
-      <div className="agent-pipeline">
-        <h3>Autonomous Multi-Agent Activity</h3>
-
-        {/* Triage Step */}
-        <div className={`pipeline-step ${triageEvent ? 'step-active' : ''}`}>
-          <div className="step-title">
-            <span className="agent-badge triage-badge">Triage Agent</span>
-            <span>{triageEvent ? `Decision: ${triageEvent.decision}` : 'Awaiting Triage'}</span>
-          </div>
-          {triageEvent && (
-            <div className="step-content">
-              <p><strong>Reasoning:</strong> {triageEvent.reason_summary}</p>
-              {triageEvent.confidence !== null && triageEvent.confidence !== undefined && (
-                <small>Confidence: {(triageEvent.confidence * 100).toFixed(0)}%</small>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Investigation Step */}
-        <div className={`pipeline-step ${investigationEvent || toolCalls.length > 0 ? 'step-active' : ''}`}>
-          <div className="step-title">
-            <span className="agent-badge investigation-badge">Investigation Agent</span>
-            <span>{investigationEvent ? `Decision: ${investigationEvent.decision}` : 'No Investigation Required'}</span>
-          </div>
-          {investigationEvent && (
-            <div className="step-content">
-              <p><strong>Findings:</strong> {investigationEvent.reason_summary}</p>
-            </div>
-          )}
-          {toolCalls.length > 0 && (
-            <div className="tool-calls-block">
-              <h5>Verified Tool Activity ({toolCalls.length} events):</h5>
-              <ul>
-                {toolCalls.map((tc, idx) => (
-                  <li key={idx}>
-                    <code>{tc.tool || 'system'}</code>: {tc.tool_result_summary || tc.event}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Resolution Step */}
-        <div className={`pipeline-step ${resolutionEvent ? 'step-active' : ''}`}>
-          <div className="step-title">
-            <span className="agent-badge resolution-badge">Resolution Agent</span>
-            <span>{resolutionEvent ? `Proposal: ${resolutionEvent.decision}` : 'Pending Proposal'}</span>
-          </div>
-          {resolutionEvent && (
-            <div className="step-content">
-              <p><strong>Rationale:</strong> {resolutionEvent.reason_summary}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Critic Step */}
-        <div className={`pipeline-step ${criticEvent ? 'step-active' : ''}`}>
-          <div className="step-title">
-            <span className="agent-badge critic-badge">Adversarial Critic</span>
-            <span>
-              {result?.critic_decision
-                ? `Audit: ${result.critic_decision.toUpperCase()}`
-                : criticEvent
-                ? `Audit: ${criticEvent.decision?.toUpperCase()}`
-                : 'Not Audited'}
-            </span>
-          </div>
-          {criticEvent && (
-            <div className="step-content">
-              <p><strong>Audit Finding:</strong> {criticEvent.reason_summary}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {policyReferences.length > 0 && (
-        <div className="policy-evidence-section">
-          <h4>Policy Evidence &amp; Citations:</h4>
-          <ul>
-            {policyReferences.map((ref, i) => (
-              <li key={i} className="citation-item">
-                <code>{ref}</code>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="metrics-bar">
-        <span><strong>Iterations:</strong> {result?.iterations ?? 0}</span>
-        <span><strong>Tools Used:</strong> {result?.tools_used.join(', ') || 'None'}</span>
-        <span><strong>Confidence:</strong> {result ? `${(result.confidence * 100).toFixed(0)}%` : 'N/A'}</span>
+      <div className="customer-timeline" aria-label="Case timeline">
+        <h3>Case timeline</h3>
+        <ol>
+          {events.map((event, index) => (
+            <li key={`${event.stage}-${index}`}>
+              <span className="customer-timeline-marker" aria-hidden="true" />
+              <div>
+                <div className="customer-timeline-heading">
+                  <strong>{stageTitles[event.stage]}</strong>
+                  <span className="timeline-outcome">
+                    {outcomeLabels[event.outcome] || event.outcome}
+                  </span>
+                </div>
+                {event.explanation && <p>{event.explanation}</p>}
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
     </div>
   );
