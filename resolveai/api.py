@@ -404,7 +404,8 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
 
     mock_mode = payload.mock if payload else False
     scenario_choice = payload.scenario if payload else None
-    mock_execution = bool(mock_mode or scenario_choice)
+    mock_execution = bool(mock_mode)
+
 
     tracer = TraceLogger(trace_dir=current_settings.trace_dir)
 

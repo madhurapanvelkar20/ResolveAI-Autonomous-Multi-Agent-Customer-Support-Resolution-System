@@ -22,6 +22,7 @@ def setup_api_env(tmp_path, monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "database_path", str(db_path))
     monkeypatch.setattr(settings, "trace_dir", str(trace_dir))
+    monkeypatch.setattr(settings, "n8n_enabled", False)
     monkeypatch.setattr(database, "DEFAULT_DB_PATH", db_path)
 
     database.init_db(db_path)
@@ -161,7 +162,7 @@ def test_run_case_with_scenario():
     assert get_res.json()["result"] is not None
 
 
-def test_real_approved_case_sends_and_persists_safe_n8n_result(monkeypatch):
+def test_explicit_mock_false_sends_and_persists_safe_n8n_result(monkeypatch):
     client = TestClient(app)
     settings = get_settings()
     monkeypatch.setattr(settings, "n8n_enabled", True)
@@ -215,7 +216,7 @@ def test_real_approved_case_sends_and_persists_safe_n8n_result(monkeypatch):
     )
     case_id = created.json()["case_id"]
 
-    first = client.post(f"/cases/{case_id}/run", json={})
+    first = client.post(f"/cases/{case_id}/run", json={"mock": False})
     assert first.status_code == 200
     assert first.json()["result"]["workflow_integration_status"] == "completed"
     assert (
