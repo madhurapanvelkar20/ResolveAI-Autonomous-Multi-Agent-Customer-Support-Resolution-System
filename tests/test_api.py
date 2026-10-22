@@ -162,6 +162,158 @@ def test_run_case_with_scenario():
     assert get_res.json()["result"] is not None
 
 
+def test_run_case_with_scenario_explicit_real_mode_unconfigured():
+    client = TestClient(app)
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-002",
+            "message": "I was charged twice for order-demo-002.",
+            "ticket_id": "ticket-demo-002",
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(
+        f"/cases/{case_id}/run",
+        json={"scenario": "eligible_refund", "mock": False},
+    )
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] == "resolved"
+    assert data["result"]["workflow_integration_status"] == "not_configured"
+
+
+def test_run_case_with_scenario_explicit_real_mode_configured(monkeypatch):
+    client = TestClient(app)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "n8n_enabled", True)
+    monkeypatch.setattr(
+        settings,
+        "n8n_webhook_url",
+        "https://n8n.example.test/webhook/resolveai-case-event",
+    )
+    monkeypatch.setattr(
+        settings, "n8n_webhook_token", SecretStr("api-test-token")
+    )
+
+    requests = []
+    transport = httpx.MockTransport(
+        lambda request: _complete_n8n_request(request, requests)
+    )
+    client_type = httpx.Client
+
+    def client_factory(*, timeout, follow_redirects):
+        return client_type(
+            transport=transport,
+            timeout=timeout,
+            follow_redirects=follow_redirects,
+        )
+
+    monkeypatch.setattr("resolveai.n8n_integration.httpx.Client", client_factory)
+
+    create_res = client.post(
+        "/cases",
+        json={
+            "customer_id": "cust-demo-003",
+            "message": "I was charged twice for order-demo-003.",
+            "ticket_id": "ticket-demo-003",
+        },
+    )
+    assert create_res.status_code == 201
+    case_id = create_res.json()["case_id"]
+
+    run_res = client.post(
+        f"/cases/{case_id}/run",
+        json={"scenario": "eligible_refund", "mock": False},
+    )
+    assert run_res.status_code == 200
+    data = run_res.json()
+    assert data["status"] == "resolved"
+    assert data["result"]["workflow_integration_status"] == "completed"
+    assert data["result"]["workflow_integration_result"] == "simulated_notification"
+    assert len(requests) == 1
+    assert requests[0]["body"]["event_type"] == "case.resolution_ready"
+    assert requests[0]["body"]["case_id"] == case_id
+    assert requests[0]["body"]["resolution_type"] == "refund"
+
+
+def test_real_approved_case_sends_and_persists_safe_n8n_result(monkeypatch):
+    client = TestClient(app)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "n8n_enabled", True)
+    monkeypatch.setattr(
+        settings,
+        "n8n_webhook_url",
+        "https://n8n.example.test/webhook/resolveai-case-event",
+    )
+    monkeypatch.setattr(
+        settings, "n8n_webhook_token", SecretStr("api-test-token")
+    )
+
+    class ApprovedWorkflow:
+        def __init__(self, **kwargs):
+            del kwargs
+            pass
+
+        def run(self, ticket):
+            return CaseResult(
+                case_id=f"case-{ticket.ticket_id}",
+                status="resolved",
+                customer_response="Resolution ready.",
+                resolution=Resolution(type="explanation"),
+                confidence=0.95,
+                agents_involved=[],
+                tools_used=[],
+                iterations=1,
+                critic_decision="approve",
+                trace_id="trace-internal-test",
+            )
+
+    monkeypatch.setattr(api_module, "ResolveAIWorkflow", ApprovedWorkflow)
+    requests = []
+    transport = httpx.MockTransport(
+        lambda request: _complete_n8n_request(request, requests)
+    )
+    client_type = httpx.Client
+
+    def client_factory(*, timeout, follow_redirects):
+        return client_type(
+            transport=transport,
+            timeout=timeout,
+            follow_redirects=follow_redirects,
+        )
+
+    monkeypatch.setattr("resolveai.n8n_integration.httpx.Client", client_factory)
+
+    created = client.post(
+        "/cases",
+        json={"customer_id": "cust-demo-001", "message": "Please review my case."},
+    )
+    case_id = created.json()["case_id"]
+
+    first = client.post(f"/cases/{case_id}/run", json={})
+    assert first.status_code == 200
+    assert first.json()["result"]["workflow_integration_status"] == "completed"
+    assert (
+        first.json()["result"]["workflow_integration_result"]
+        == "simulated_notification"
+    )
+    assert first.json()["result"]["financial_action_status"] is None
+    assert len(requests) == 1
+    assert requests[0]["headers"]["Authorization"] == "Bearer api-test-token"
+    assert "trace_id" not in requests[0]["body"]
+
+    second = client.post(f"/cases/{case_id}/run", json={})
+    assert second.status_code == 200
+    assert second.json()["result"]["workflow_integration_status"] == "completed"
+    assert len(requests) == 1
+
+    stored = client.get(f"/cases/{case_id}")
+    assert stored.json()["result"]["workflow_integration_result"] == "simulated_notification"
+
+
 def test_explicit_mock_false_sends_and_persists_safe_n8n_result(monkeypatch):
     client = TestClient(app)
     settings = get_settings()

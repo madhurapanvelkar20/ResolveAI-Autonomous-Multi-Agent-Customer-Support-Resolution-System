@@ -84,8 +84,14 @@ def dispatch_resolution_event(
         return "not_configured"
 
     url = settings.n8n_webhook_url.strip()
-    token = settings.n8n_webhook_token.get_secret_value().strip()
-    if not url or not _valid_webhook_url(url):
+    raw_token = settings.n8n_webhook_token.get_secret_value().strip()
+    token = raw_token.strip("'\"")
+    while token.lower().startswith("bearer ") or token.lower() == "bearer":
+        if token.lower() == "bearer":
+            token = ""
+            break
+        token = token[7:].strip().strip("'\"")
+    if not url or not token or not _valid_webhook_url(url):
         logger.warning("n8n workflow integration has incomplete or invalid configuration")
         return "failed"
 

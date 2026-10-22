@@ -130,7 +130,7 @@ class CaseCreateIn(BaseModel):
 class CaseRunIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    mock: bool = False
+    mock: bool | None = None
     scenario: str | None = None
 
 
@@ -402,10 +402,12 @@ def run_case_workflow(case_id: str, payload: CaseRunIn | None = None):
         metadata={"subject": ticket_record["subject"], **case_meta},
     )
 
-    mock_mode = payload.mock if payload else False
+    mock_mode = payload.mock if payload else None
     scenario_choice = payload.scenario if payload else None
-    mock_execution = bool(mock_mode)
-
+    if mock_mode is not None:
+        mock_execution = mock_mode
+    else:
+        mock_execution = bool(scenario_choice)
 
     tracer = TraceLogger(trace_dir=current_settings.trace_dir)
 
