@@ -269,3 +269,54 @@ def test_timeout_is_reported_without_claiming_completion(monkeypatch):
         _approved_result(),
         mock_mode=False,
     ) == "timed_out"
+
+
+@pytest.mark.parametrize(
+    "token_input",
+    [
+        "unit-test-token",
+        "Bearer unit-test-token",
+        "bearer unit-test-token",
+        "Bearer  unit-test-token",
+        'Bearer "unit-test-token"',
+    ],
+)
+def test_authorization_header_handles_bearer_prefix_without_duplication(token_input, monkeypatch):
+    observed = {}
+
+    def handler(request):
+        observed["headers"] = request.headers
+        event_key = request.headers["Idempotency-Key"]
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "event_idempotency_key": event_key,
+                "demo_result": "simulated_notification",
+            },
+        )
+
+    _install_transport(monkeypatch, handler)
+
+    status = dispatch_resolution_event(
+        _settings(token=token_input),
+        "case-test-1",
+        _approved_result(resolution_type="refund"),
+        mock_mode=False,
+    )
+
+    assert status == "completed"
+    assert observed["headers"]["Authorization"] == "Bearer unit-test-token"
+
+
+def test_empty_token_after_bearer_prefix_fails_safely(monkeypatch):
+    monkeypatch.setattr(
+        "resolveai.n8n_integration.httpx.Client", _unexpected_http_client
+    )
+
+    assert dispatch_resolution_event(
+        _settings(token="Bearer "),
+        "case-test-1",
+        _approved_result(),
+        mock_mode=False,
+    ) == "failed"
