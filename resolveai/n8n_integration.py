@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 ALLOWED_RESOLUTION_TYPES = frozenset(
     {"refund", "replacement", "return", "explanation", "escalation"}
 )
-LOCAL_WEBHOOK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "n8n"})
+LOCAL_WEBHOOK_HOSTS = frozenset(
+    {"localhost", "127.0.0.1", "::1", "n8n", "host.docker.internal"}
+)
 
 
 class ResolutionEvent(ContractModel):

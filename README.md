@@ -179,29 +179,87 @@ Health check:
 Invoke-RestMethod -Uri http://127.0.0.1:8000/health
 ```
 
-### 4.6 Optional safe n8n resolution-event workflow
+### 4.6 Safe n8n Webhook Workflow Integration
 
-ResolveAI includes a local n8n service in `docker-compose.yml` and an importable workflow at [`n8n/resolution_event_demo.json`](n8n/resolution_event_demo.json). The API sends this workflow only a minimal event after a real-mode case has a validated, Critic-approved, allowlisted resolution. The sample workflow validates that event and returns a **simulated notification**; it does not issue refunds, change accounts, dispatch real notifications, execute commands, or read customer/payment/trace data. Deterministic Mock Mode and benchmark scenarios never call n8n.
+ResolveAI provides an opt-in integration to dispatch approved resolution events to n8n for demonstration workflows. The importable workflow definition is located at [`n8n/resolution_event_demo.json`](n8n/resolution_event_demo.json). When a case resolves with an approved resolution (e.g. `refund`, `replacement`), the backend sends a minimal, authenticated event to the n8n Webhook node.
 
-The integration is disabled by default. Add these placeholder variables to your local `.env` (never commit the actual token):
+The sample workflow safely validates the incoming payload and returns a **simulated notification** (`demo_result: "simulated_notification"`). It never triggers live financial charges or actual customer emails.
+
+#### Environment Variables Configuration
+
+Set these variables in your local `.env` file (never commit live tokens):
 
 ```dotenv
-N8N_ENABLED=false
-N8N_WEBHOOK_URL=
-N8N_WEBHOOK_TOKEN=
+# Enable or disable the n8n integration (default: false)
+N8N_ENABLED=true
+
+# Webhook URL for event delivery
+# For local Windows host development:
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/resolveai-case-event
+# For Docker Compose networking:
+# N8N_WEBHOOK_URL=http://n8n:5678/webhook/resolveai-case-event
+# For containerized backend to host n8n:
+# N8N_WEBHOOK_URL=http://host.docker.internal:5678/webhook/resolveai-case-event
+
+# Webhook Authorization token (private secret)
+N8N_WEBHOOK_TOKEN=your_private_webhook_token_here
+
+# Timeout in seconds (default: 5)
 N8N_TIMEOUT_SECONDS=5
 ```
 
-To enable the safe local test:
+#### How to Start the Services
 
-1. Set `N8N_ENABLED=true` and set `N8N_WEBHOOK_TOKEN` to a new, private token.
-2. Start the existing local n8n service and API with Docker Compose: `docker compose up -d api n8n`. n8n is available at `http://localhost:5678`. The Compose API uses the internal URL `http://n8n:5678/webhook/resolveai-case-event`; if running the API directly with Uvicorn on the host, set `N8N_WEBHOOK_URL=http://localhost:5678/webhook/resolveai-case-event`.
-3. In n8n, import `n8n/resolution_event_demo.json`. Create a **Header Auth** credential with header name `Authorization` and value `Bearer <the same private token>`, assign it to the workflow's **Approved Case Event Webhook** node, then save and activate the workflow. The credential is intentionally not included in the export.
-4. Run ResolveAI with a customer-created case in **Live LLM** mode (do not choose a benchmark scenario). The LLM provider must already be configured. The frontend shows whether the event was accepted, completed, failed, timed out, skipped in mock mode, or not configured. It never labels an approved refund as submitted or completed based on the n8n event.
+1. **Start the n8n Container:**
+   ```powershell
+   docker compose up -d n8n
+   ```
+   n8n will be accessible at `http://localhost:5678`.
 
-Only the following fields are sent: event type, case ID, allowlisted resolution type, and a stable case idempotency key (also sent in the `Idempotency-Key` header). Requests use bearer authentication, a configurable timeout, and no automatic retries because a timeout can leave the remote outcome uncertain. n8n validates and echoes the idempotency key; ResolveAI's existing resolved-case guard prevents normal sequential duplicate submissions. Concurrent requests across multiple API workers are not an exactly-once delivery guarantee and require production-grade durable deduplication. Completion is reported and persisted only when the response validates as `completed` and confirms `simulated_notification`. Connection errors, non-success HTTP responses, timeouts, and invalid responses are reported separately from the case resolution. A failed optional integration does not mean n8n completed the workflow, and no raw webhook response or credentials are exposed to the customer UI.
+2. **Start the FastAPI Backend:**
+   ```powershell
+   .venv\Scripts\python.exe -m uvicorn resolveai.api:app --host 127.0.0.1 --port 8000 --reload
+   ```
+   Backend documentation: `http://127.0.0.1:8000/docs`
 
-This is a synchronous local demonstration, not a durable production queue: delivery after an ambiguous timeout requires operator review. The n8n container currently uses the existing `latest` image tag; pin and secure the n8n version, credentials, network access, persistence, and TLS before production use. No n8n instance is started or contacted by automated tests.
+3. **Start the React Frontend:**
+   ```powershell
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Frontend interface: `http://localhost:5173`
+
+#### Configuring the n8n Workflow
+
+1. Open `http://localhost:5678` in your browser.
+2. In n8n, click **Workflows** → **Import from File...** and select [`n8n/resolution_event_demo.json`](n8n/resolution_event_demo.json).
+3. In the **Approved Case Event Webhook** node:
+   - Ensure the path is set to `resolveai-case-event` and method is `POST`.
+   - Set Authentication to **Header Auth**.
+   - Create a new Header Auth credential with:
+     - **Name:** `Authorization`
+     - **Value:** `Bearer <your_private_webhook_token_here>`
+4. Toggle the workflow switch to **Active** (required for production webhook delivery at `/webhook/resolveai-case-event`).
+   *(If testing interactively with an inactive workflow, use `/webhook-test/resolveai-case-event` and click "Listen for test event" in n8n).*
+
+#### Live Integration Mode vs Mock Demo Mode
+
+The frontend Customer Intake form features a clear **Integration Mode** switch:
+- **Live Integration Mode (Default):** Sends `mock: false`. Upon case resolution, the backend dispatches the resolution event to n8n, and the frontend displays the verified outcome (`completed`, `not_configured`, `failed`, or `timed_out`).
+- **Mock Demo Mode:** Toggle the switch to enable mock mode (`mock: true`). The case executes offline deterministically and reports `mock_skipped`, making zero outbound network calls.
+- **Benchmark Scenarios Tab:** Always executes in deterministic mock mode to preserve reproducible evaluation scoring.
+
+#### Troubleshooting Missing n8n Executions
+
+If you submit a case and no execution appears in n8n:
+1. **Check the Frontend Integration Status:**
+   - `Mock mode; no external workflow was called.`: The case was run in mock mode (`mock: true`). Ensure the Integration Mode toggle is set to Live Integration.
+   - `n8n is not configured; no external workflow was called.`: `N8N_ENABLED` is `false` or missing in your `.env`. Set `N8N_ENABLED=true` and restart FastAPI.
+   - `No eligible approved result was sent to an external workflow.`: The case was escalated or rejected by the Critic (e.g. high-risk fraud). Only approved resolutions emit webhook events.
+   - `The safe n8n workflow failed`: Connection refused or HTTP 401 Unauthorized. Check that n8n is running and that `N8N_WEBHOOK_TOKEN` matches the credential configured in n8n.
+2. **Verify Workflow Activation:** Production webhooks (`/webhook/...`) require the workflow to be toggled to **Active** in n8n. If inactive, n8n rejects production webhooks.
+3. **Verify Host URL:** If running FastAPI inside a Docker container, use `http://n8n:5678/...` instead of `localhost`. If running FastAPI on host Windows, use `http://localhost:5678/...`.
 
 ---
 

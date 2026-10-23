@@ -320,3 +320,35 @@ def test_empty_token_after_bearer_prefix_fails_safely(monkeypatch):
         _approved_result(),
         mock_mode=False,
     ) == "failed"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:5678/webhook/resolveai-case-event",
+        "http://127.0.0.1:5678/webhook/resolveai-case-event",
+        "http://n8n:5678/webhook/resolveai-case-event",
+        "http://host.docker.internal:5678/webhook/resolveai-case-event",
+        "https://n8n.example.test/webhook/resolveai-case-event",
+    ],
+)
+def test_valid_webhook_hosts_accepted_for_delivery(url, monkeypatch):
+    def handler(request):
+        event_key = request.headers["Idempotency-Key"]
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "event_idempotency_key": event_key,
+                "demo_result": "simulated_notification",
+            },
+        )
+
+    _install_transport(monkeypatch, handler)
+
+    assert dispatch_resolution_event(
+        _settings(url=url),
+        "case-test-1",
+        _approved_result(),
+        mock_mode=False,
+    ) == "completed"

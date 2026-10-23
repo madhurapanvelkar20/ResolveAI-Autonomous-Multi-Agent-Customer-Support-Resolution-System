@@ -22,7 +22,7 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
     'I was charged twice for order-demo-001. Please issue a refund for the duplicate charge.'
   );
   const [channel, setChannel] = useState<'web' | 'email' | 'chat'>('web');
-  const [isMockMode, setIsMockMode] = useState(true);
+  const [isMockMode, setIsMockMode] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -216,17 +216,31 @@ export const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit, isLoading }) =
 
         <div className="form-row mode-selector">
           <div className="mode-toggle">
-            <label className="switch">
+            <label className="switch" htmlFor="mode-toggle-checkbox">
               <input
+                id="mode-toggle-checkbox"
                 type="checkbox"
-                checked={isMockMode}
-                onChange={(e) => setIsMockMode(e.target.checked)}
+                checked={!isMockMode}
+                onChange={(e) => setIsMockMode(!e.target.checked)}
+                aria-label="Toggle integration mode"
               />
               <span className="slider round"></span>
             </label>
-            <span className="mode-label">
-              <strong>Mode:</strong> {isMockMode ? 'Deterministic Mock (Offline Safe)' : 'Live LLM (Cloud / Local)'}
-            </span>
+            <div className="mode-label-container">
+              <span className="mode-label">
+                <strong>Integration Mode:</strong>{' '}
+                {!isMockMode ? (
+                  <span className="mode-text-live">Live Integration (n8n Webhook Active)</span>
+                ) : (
+                  <span className="mode-text-mock">Mock Demo Mode (Webhooks Skipped)</span>
+                )}
+              </span>
+              <p className="mode-description">
+                {!isMockMode
+                  ? 'Approved case events will be dispatched to the configured n8n webhook.'
+                  : 'Runs offline safely without triggering external workflow webhooks.'}
+              </p>
+            </div>
           </div>
         </div>
 

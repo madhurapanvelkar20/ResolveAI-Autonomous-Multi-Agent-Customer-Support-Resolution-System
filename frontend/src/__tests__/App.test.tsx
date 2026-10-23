@@ -133,6 +133,54 @@ describe('App Component', () => {
     });
   });
 
+  it('submits a case through customer intake with mock: false and visualizes live result', async () => {
+    vi.mocked(api.createCase).mockResolvedValue({
+      case_id: 'case-live-1',
+      ticket_id: 'ticket-live-1',
+      customer_id: 'cust-demo-001',
+      status: 'new',
+    });
+
+    vi.mocked(api.runCase).mockResolvedValue({
+      case_id: 'case-live-1',
+      status: 'resolved',
+      result: {
+        case_id: 'case-live-1',
+        status: 'resolved',
+        customer_response: 'Refund processed.',
+        resolution: { type: 'refund', amount: 49.99, currency: 'USD' },
+        confidence: 0.98,
+        agents_involved: ['triage', 'investigation', 'resolution', 'critic'],
+        tools_used: ['lookup_order'],
+        iterations: 4,
+        critic_decision: 'approve',
+        trace_id: 'tr-live',
+        workflow_integration_status: 'completed',
+        workflow_integration_result: 'simulated_notification',
+      },
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText(/Backend: Online/i)).toBeInTheDocument();
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /Submit & Execute Case/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.createCase).toHaveBeenCalledTimes(1);
+      expect(api.runCase).toHaveBeenCalledWith('case-live-1', {
+        mock: false,
+        scenario: 'eligible_refund',
+      });
+      expect(screen.getByText('Live Integration Mode')).toBeInTheDocument();
+      expect(
+        screen.getByText(/The safe n8n demonstration workflow completed/i)
+      ).toBeInTheDocument();
+    });
+  });
+
   it('polls health periodically and cleans up timer on unmount', () => {
     const setIntervalSpy = vi.spyOn(window, 'setInterval');
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');

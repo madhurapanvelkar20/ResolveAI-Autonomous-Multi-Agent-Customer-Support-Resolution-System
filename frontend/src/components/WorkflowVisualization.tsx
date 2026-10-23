@@ -19,6 +19,10 @@ const MockModeIndicator = () => (
   <span className="mode-badge-mock">Deterministic Mock Mode</span>
 );
 
+const LiveModeIndicator = () => (
+  <span className="mode-badge-live">Live Integration Mode</span>
+);
+
 function formatAmount(amount: number | string | null | undefined, currency?: string | null) {
   if (amount === null || amount === undefined || amount === '') return '';
   return currency === 'USD' || !currency ? ` $${amount}` : ` ${currency} ${amount}`;
@@ -138,8 +142,8 @@ export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
   error,
   isMock,
 }) => {
-  const mockIndicator = isMock && (caseId || result || isLoading || error)
-    ? <MockModeIndicator />
+  const mockIndicator = (caseId || result || isLoading || error)
+    ? (isMock ? <MockModeIndicator /> : <LiveModeIndicator />)
     : null;
 
   if (isLoading) {
@@ -237,7 +241,7 @@ export const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({
       )}
 
       {result?.workflow_integration_status && (
-        <p className="integration-status" role="status">
+        <p className={`integration-status integration-status-${result.workflow_integration_status}`} role="status">
           {workflowIntegrationLabels[result.workflow_integration_status]}
         </p>
       )}

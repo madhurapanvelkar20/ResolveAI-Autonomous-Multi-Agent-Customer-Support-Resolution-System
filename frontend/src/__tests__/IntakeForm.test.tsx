@@ -52,7 +52,7 @@ describe('IntakeForm Component', () => {
     expect(mockSubmit).not.toHaveBeenCalled();
   });
 
-  it('submits valid payload and switches demo profile', () => {
+  it('submits valid payload in live integration mode by default and switches demo profile', () => {
     const mockSubmit = vi.fn();
     render(<IntakeForm onSubmit={mockSubmit} isLoading={false} />);
 
@@ -68,6 +68,25 @@ describe('IntakeForm Component', () => {
       expect.objectContaining({
         customer_id: 'cust-demo-002',
         channel: 'web',
+        mock: false,
+        scenario: 'delivery_delay',
+      })
+    );
+  });
+
+  it('submits mock: true when mock mode is enabled via the toggle', () => {
+    const mockSubmit = vi.fn();
+    render(<IntakeForm onSubmit={mockSubmit} isLoading={false} />);
+
+    const toggle = screen.getByRole('checkbox', { name: /Toggle integration mode/i });
+    fireEvent.click(toggle);
+
+    const submitBtn = screen.getByRole('button', { name: /Submit & Execute Case/i });
+    fireEvent.click(submitBtn);
+
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
         mock: true,
       })
     );

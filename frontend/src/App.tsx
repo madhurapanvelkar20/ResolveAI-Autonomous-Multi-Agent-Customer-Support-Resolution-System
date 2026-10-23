@@ -23,7 +23,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'intake' | 'scenarios' | 'safety'>('intake');
-  const [isLastExecutionMock, setIsLastExecutionMock] = useState<boolean>(true);
+  const [isLastExecutionMock, setIsLastExecutionMock] = useState<boolean>(false);
 
   const refreshHealth = useCallback(async () => {
     try {
